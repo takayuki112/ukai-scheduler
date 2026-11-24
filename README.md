@@ -96,6 +96,7 @@ team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
 | | [Observability](docs/observability.md): metrics and the status endpoint |
 | | [Troubleshooting](docs/troubleshooting.md) |
 | Developers | [Architecture](docs/architecture.md), [Testing](docs/testing.md) |
+| | [Future work](docs/future.md): what is planned |
 
 ## Status
 

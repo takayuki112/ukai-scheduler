@@ -113,6 +113,19 @@ Usually a job evicts only jobs of lower priority, in the same queue:
 A promoted job evicts nobody as such: it is already running. Between queues, KAI's own fair
 share applies as before.
 
+## When P1 alone fills the cluster
+
+Budgets may add up to more than the cluster has. P1 then wait for GPUs, and a P1 never evicts
+another. Within a KAI queue:
+
+- **The oldest that can start goes first**, by the time of submission.
+- **A held job blocks nobody**, but keeps its place: when its user's budget frees up, it goes before
+  younger jobs of other users.
+- **Smaller jobs may overtake** a large one that does not fit the free GPUs. Nothing is reserved for it.
+- **Promoted jobs of other users do not give way**, as they have the priority of P1.
+
+Between KAI queues, KAI's fair share decides. Another order is [planned](future.md).
+
 ## Questions
 
 **Why longest running first for promotion, but earliest submitted for the allowance?** A job
@@ -124,4 +137,5 @@ demoted as needed.
 
 **Is an unused budget kept free?** No. Idle GPUs are for anyone.
 
-**Can one user block others with many P1?** Only up to the budget at a time.
+**Can one user block others with many P1?** Only up to the budget at a time. But on a full cluster
+an older backlog goes first, see [above](#when-p1-alone-fills-the-cluster).
