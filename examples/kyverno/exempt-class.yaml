@@ -1,0 +1,26 @@
+# Only the owners listed may use the class that is exempt from budgets. This trusts the
+# owner label, so it needs owner.yaml. Adapt the class and the owners.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-exempt-class
+  annotations: {pod-policies.kyverno.io/autogen-controllers: none}
+spec:
+  background: false
+  rules:
+    - name: listed-owners
+      match:
+        any:
+          - resources: {kinds: [Pod], operations: [CREATE]}
+      preconditions:
+        all:
+          - {key: "{{ request.object.spec.priorityClassName || '' }}", operator: Equals, value: test-top}
+      validate:
+        failureAction: Enforce
+        message: this priority class is restricted
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.object.metadata.labels.\"example.com/owner\" || '' }}"
+                operator: AnyNotIn
+                value: [carol]

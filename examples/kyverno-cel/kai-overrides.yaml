@@ -1,0 +1,48 @@
+# As in ../kyverno/kai-overrides.yaml, for Kyverno 1.20 or later: see there what to adapt.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-kai-labels
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [CREATE, UPDATE]}
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs, cronjobs], operations: [CREATE, UPDATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [CREATE, UPDATE]}
+  matchConditions:
+    - name: not-node-or-kai
+      expression: "!request.userInfo.username.startsWith('system:node:') && !request.userInfo.username.startsWith('system:serviceaccount:kai-scheduler:')"
+  validations:
+    - message: labels priorityClassName and kai.scheduler/preemptibility are not allowed
+      expression: >-
+        !has(object.metadata.labels) || !object.metadata.labels.exists(k, k in ['priorityClassName', 'kai.scheduler/preemptibility'])
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-kai-annotations
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [CREATE, UPDATE]}
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs, cronjobs], operations: [CREATE, UPDATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [CREATE, UPDATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  validations:
+    - message: KAI annotations that delay eviction or choose a PodGroup are not allowed
+      expression: >-
+        (has(object.metadata) && has(object.metadata.annotations) && 'kai.scheduler/preemption-delay' in object.metadata.annotations ? object.metadata.annotations['kai.scheduler/preemption-delay'] : '') == (oldObject == null ? '' : (has(oldObject.metadata) && has(oldObject.metadata.annotations) && 'kai.scheduler/preemption-delay' in oldObject.metadata.annotations ? oldObject.metadata.annotations['kai.scheduler/preemption-delay'] : ''))
+    - message: KAI annotations that delay eviction or choose a PodGroup are not allowed
+      expression: >-
+        (has(object.metadata) && has(object.metadata.annotations) && 'kai.scheduler/staleness-grace-period' in object.metadata.annotations ? object.metadata.annotations['kai.scheduler/staleness-grace-period'] : '') == (oldObject == null ? '' : (has(oldObject.metadata) && has(oldObject.metadata.annotations) && 'kai.scheduler/staleness-grace-period' in oldObject.metadata.annotations ? oldObject.metadata.annotations['kai.scheduler/staleness-grace-period'] : ''))
+    - message: KAI annotations that delay eviction or choose a PodGroup are not allowed
+      expression: >-
+        (has(object.metadata) && has(object.metadata.annotations) && 'pod-group-name' in object.metadata.annotations ? object.metadata.annotations['pod-group-name'] : '') == (oldObject == null ? '' : (has(oldObject.metadata) && has(oldObject.metadata.annotations) && 'pod-group-name' in oldObject.metadata.annotations ? oldObject.metadata.annotations['pod-group-name'] : ''))

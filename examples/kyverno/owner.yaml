@@ -1,0 +1,108 @@
+# Sets the owner label to the user who submits, on the workload and on its pods, so that
+# nobody can use another's budget. Adapt:
+# - example.com/owner, here and in the plugin's ownerLabel
+# - the kinds: add every custom workload type that users may submit, with the path to its
+#   pod template, or they can set the label there
+# Service accounts are trusted, as controllers create pods with them. If users can use
+# one, also restrict it.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: set-owner
+  annotations: {pod-policies.kyverno.io/autogen-controllers: none}
+spec:
+  background: false
+  rules:
+    - name: pods
+      match:
+        any:
+          - resources: {kinds: [Pod], operations: [CREATE]}
+      preconditions: &users
+        all:
+          - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:*"}
+      mutate:
+        patchStrategicMerge:
+          metadata: &owned
+            labels:
+              example.com/owner: "{{ replace_all(request.userInfo.username, '@', '-at-') }}"
+    - name: workloads
+      match:
+        any:
+          - resources: {kinds: [Job, Deployment, StatefulSet, ReplicaSet], operations: [CREATE]}
+      preconditions: *users
+      mutate:
+        patchStrategicMerge:
+          metadata: *owned
+          spec:
+            template:
+              metadata: *owned
+    - name: cronjobs
+      match:
+        any:
+          - resources: {kinds: [CronJob], operations: [CREATE]}
+      preconditions: *users
+      mutate:
+        patchStrategicMerge:
+          metadata: *owned
+          spec:
+            jobTemplate:
+              metadata: *owned
+              spec:
+                template:
+                  metadata: *owned
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: keep-owner
+  annotations: {pod-policies.kyverno.io/autogen-controllers: none}
+spec:
+  background: false
+  rules:
+    - name: on-the-object
+      match:
+        any:
+          - resources: {kinds: [Pod, Job, CronJob, Deployment, StatefulSet, ReplicaSet], operations: [UPDATE]}
+      preconditions: &users2
+        all:
+          - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:*"}
+      validate:
+        failureAction: Enforce
+        message: the owner label cannot be changed
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.metadata.labels.\"example.com/owner\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.metadata.labels.\"example.com/owner\" || '' }}"
+    - name: in-the-template
+      match:
+        any:
+          - resources: {kinds: [Job, Deployment, StatefulSet, ReplicaSet], operations: [UPDATE]}
+      preconditions: *users2
+      validate:
+        failureAction: Enforce
+        message: the owner label cannot be changed
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+    - name: in-the-cronjob
+      match:
+        any:
+          - resources: {kinds: [CronJob], operations: [UPDATE]}
+      preconditions: *users2
+      validate:
+        failureAction: Enforce
+        message: the owner label cannot be changed
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.jobTemplate.metadata.labels.\"example.com/owner\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.jobTemplate.metadata.labels.\"example.com/owner\" || '' }}"
+              - key: "{{ request.object.spec.jobTemplate.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.jobTemplate.spec.template.metadata.labels.\"example.com/owner\" || '' }}"

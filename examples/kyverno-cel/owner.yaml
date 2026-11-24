@@ -1,0 +1,177 @@
+# As in ../kyverno/owner.yaml, for Kyverno 1.20 or later: see there what to adapt.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: set-owner-pods
+spec:
+  evaluation: {admission: {enabled: true}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [CREATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  variables:
+    - name: owner
+      expression: "request.userInfo.username.replace('@', '-at-')"
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          (has(object.metadata) && has(object.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/metadata/labels', value: Object.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/metadata/labels/example.com~1owner', value: variables.owner}]
+---
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: set-owner-workloads
+spec:
+  evaluation: {admission: {enabled: true}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs], operations: [CREATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [CREATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  variables:
+    - name: owner
+      expression: "request.userInfo.username.replace('@', '-at-')"
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          (has(object.metadata) && has(object.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/metadata/labels', value: Object.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/metadata/labels/example.com~1owner', value: variables.owner}] +
+          (has(object.spec.template.metadata) ? [] : [JSONPatch{op: 'add', path: '/spec/template/metadata', value: Object.spec.template.metadata{}}]) +
+          (has(object.spec.template.metadata) && has(object.spec.template.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/spec/template/metadata/labels', value: Object.spec.template.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/spec/template/metadata/labels/example.com~1owner', value: variables.owner}]
+---
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: set-owner-cronjobs
+spec:
+  evaluation: {admission: {enabled: true}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [cronjobs], operations: [CREATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  variables:
+    - name: owner
+      expression: "request.userInfo.username.replace('@', '-at-')"
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          (has(object.metadata) && has(object.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/metadata/labels', value: Object.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/metadata/labels/example.com~1owner', value: variables.owner}] +
+          (has(object.spec.jobTemplate.metadata) ? [] : [JSONPatch{op: 'add', path: '/spec/jobTemplate/metadata', value: Object.spec.jobTemplate.metadata{}}]) +
+          (has(object.spec.jobTemplate.metadata) && has(object.spec.jobTemplate.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/spec/jobTemplate/metadata/labels', value: Object.spec.jobTemplate.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/spec/jobTemplate/metadata/labels/example.com~1owner', value: variables.owner}] +
+          (has(object.spec.jobTemplate.spec.template.metadata) ? [] : [JSONPatch{op: 'add', path: '/spec/jobTemplate/spec/template/metadata', value: Object.spec.jobTemplate.spec.template.metadata{}}]) +
+          (has(object.spec.jobTemplate.spec.template.metadata) && has(object.spec.jobTemplate.spec.template.metadata.labels) ? [] : [JSONPatch{op: 'add', path: '/spec/jobTemplate/spec/template/metadata/labels', value: Object.spec.jobTemplate.spec.template.metadata.labels{}}]) +
+          [JSONPatch{op: 'add', path: '/spec/jobTemplate/spec/template/metadata/labels/example.com~1owner', value: variables.owner}]
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: keep-owner
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [UPDATE]}
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs, cronjobs], operations: [UPDATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [UPDATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  validations:
+    - message: the owner label cannot be changed
+      expression: >-
+        (has(object.metadata) && has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels ? object.metadata.labels['example.com/owner'] : '') == (has(oldObject.metadata) && has(oldObject.metadata.labels) && 'example.com/owner' in oldObject.metadata.labels ? oldObject.metadata.labels['example.com/owner'] : '')
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: keep-owner-in-templates
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs], operations: [UPDATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [UPDATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  validations:
+    - message: the owner label cannot be changed
+      expression: >-
+        (has(object.spec) && has(object.spec.template) && has(object.spec.template.metadata) && has(object.spec.template.metadata.labels) && 'example.com/owner' in object.spec.template.metadata.labels ? object.spec.template.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.template) && has(oldObject.spec.template.metadata) && has(oldObject.spec.template.metadata.labels) && 'example.com/owner' in oldObject.spec.template.metadata.labels ? oldObject.spec.template.metadata.labels['example.com/owner'] : '')
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: keep-owner-in-cronjobs
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [cronjobs], operations: [UPDATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  validations:
+    - message: the owner label cannot be changed
+      expression: >-
+        (has(object.spec) && has(object.spec.jobTemplate) && has(object.spec.jobTemplate.metadata) && has(object.spec.jobTemplate.metadata.labels) && 'example.com/owner' in object.spec.jobTemplate.metadata.labels ? object.spec.jobTemplate.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.jobTemplate) && has(oldObject.spec.jobTemplate.metadata) && has(oldObject.spec.jobTemplate.metadata.labels) && 'example.com/owner' in oldObject.spec.jobTemplate.metadata.labels ? oldObject.spec.jobTemplate.metadata.labels['example.com/owner'] : '')
+    - message: the owner label cannot be changed
+      expression: >-
+        (has(object.spec) && has(object.spec.jobTemplate) && has(object.spec.jobTemplate.spec) && has(object.spec.jobTemplate.spec.template) && has(object.spec.jobTemplate.spec.template.metadata) && has(object.spec.jobTemplate.spec.template.metadata.labels) && 'example.com/owner' in object.spec.jobTemplate.spec.template.metadata.labels ? object.spec.jobTemplate.spec.template.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.jobTemplate) && has(oldObject.spec.jobTemplate.spec) && has(oldObject.spec.jobTemplate.spec.template) && has(oldObject.spec.jobTemplate.spec.template.metadata) && has(oldObject.spec.jobTemplate.spec.template.metadata.labels) && 'example.com/owner' in oldObject.spec.jobTemplate.spec.template.metadata.labels ? oldObject.spec.jobTemplate.spec.template.metadata.labels['example.com/owner'] : '')
+---
+# So that jobs are rejected, not let through, if the label could not be set.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: check-owner
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [CREATE]}
+      - {apiGroups: [batch], apiVersions: ["*"], resources: [jobs, cronjobs], operations: [CREATE]}
+      - {apiGroups: [apps], apiVersions: ["*"], resources: [deployments, statefulsets, replicasets], operations: [CREATE]}
+  matchConditions:
+    - name: users
+      expression: "!request.userInfo.username.startsWith('system:')"
+  variables:
+    - name: owner
+      expression: "request.userInfo.username.replace('@', '-at-')"
+    - name: template
+      expression: >-
+        has(object.spec.jobTemplate) ? object.spec.jobTemplate.spec.template :
+        has(object.spec.template) ? object.spec.template : object
+  validations:
+    - message: the owner label must name the user
+      expression: >-
+        has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels &&
+        object.metadata.labels['example.com/owner'] == variables.owner
+    - message: the owner label of the pod template must name the user
+      expression: >-
+        has(variables.template.metadata) && has(variables.template.metadata.labels) &&
+        'example.com/owner' in variables.template.metadata.labels &&
+        variables.template.metadata.labels['example.com/owner'] == variables.owner

@@ -1,0 +1,20 @@
+# An evicted pod keeps its GPUs until its grace period is over, and its author chooses
+# that. Allow enough for the slowest checkpoint. Custom workload types are checked when
+# they create pods.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: cap-grace-period
+spec:
+  background: false
+  rules:
+    - name: at-most-5-minutes
+      match:
+        any:
+          - resources: {kinds: [Pod], operations: [CREATE]}
+      validate:
+        failureAction: Enforce # Audit first
+        message: terminationGracePeriodSeconds may be at most 300
+        pattern:
+          spec:
+            =(terminationGracePeriodSeconds): "<=300"

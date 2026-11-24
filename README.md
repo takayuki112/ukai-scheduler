@@ -1,148 +1,88 @@
 # ukai-scheduler
 
-A build of [KAI Scheduler](https://github.com/kai-scheduler/KAI-Scheduler) that gives
-each person a GPU budget at high priority within a shared queue. It is an independent
-project and is not affiliated with KAI Scheduler or NVIDIA.
+**Per-person GPU budgets and fair priority tiers for a shared Kubernetes cluster, built on
+[KAI Scheduler](https://github.com/kai-scheduler/KAI-Scheduler).**
 
-It is not a fork: it imports KAI v0.18.9 and adds one plugin, `tierbudget`, and one
-action, `ukai-consolidation`. The rest of a KAI installation stays as it is.
+[![ci](https://github.com/takayuki112/ukai-scheduler/actions/workflows/ci.yaml/badge.svg)](https://github.com/takayuki112/ukai-scheduler/actions/workflows/ci.yaml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Status: not yet used in production.
+## The problem
 
-## What it does
+Everyone shares one GPU queue, and priority classes decide who goes first. Then everyone
+submits everything at high priority, and priority means nothing.
 
-Jobs are sorted by their priority class. "Owner" is the value of a label on the job.
+## What this does
 
-| Class | Behaviour |
+Each person gets a **budget** of GPUs at high priority.
+
+- **Above the budget, high-priority jobs wait**, even if GPUs are free, and say why.
+- **Unused budget is not wasted.** A person's running medium-priority jobs are *promoted*
+  into it, and are then as safe from eviction as high-priority jobs.
+- **Nobody hogs the middle either.** Beyond an *allowance*, medium-priority jobs become
+  *excess*: they still run on idle GPUs, but give way first.
+- **Promotion lends, it does not give.** When the person submits a high-priority job, their
+  own promoted jobs make room.
+
+![Six steps: a job is promoted, another is held, and a promoted job gives way to its owner's own](docs/images/story.gif)
+
+*8 GPUs, a budget of 4 and an allowance of 2 per person. A
+[test](pkg/tierbudget/story_test.go) runs these steps through the scheduler.*
+
+## How it works
+
+It is **not a fork**. It is KAI v0.18.9 with one added plugin and one added action, and
+replaces only the scheduler's image. Tiers are worked out afresh every cycle from what is
+running, and change only KAI's in-memory copy of a job's priority: nothing is stored, your
+objects are not modified, and a change of tier restarts nothing by itself.
+
+```mermaid
+flowchart LR
+    jobs[Jobs and pods] --> kai
+    subgraph kai[Scheduler, every cycle]
+        direction LR
+        snap[Snapshot] --> tiers[<b>tierbudget</b><br/>who is over budget,<br/>promoted or excess?] --> act[KAI's actions<br/>allocate, preempt, ...]
+    end
+    kai --> gpus[GPUs]
+    tiers -.-> obs[Metrics, /tiers,<br/>events on held pods]
+```
+
+If the configuration is wrong or the plugin fails, the scheduler behaves as stock KAI.
+
+## Try it
+
+| You want to | Cost | How |
+|---|---|---|
+| See what it would do to **your** cluster | Nothing is installed | [Replay a snapshot](docs/install.md#1-replay-a-snapshot) |
+| Watch its decisions live | Audit mode: it only logs | [Audit](docs/install.md#3-audit) |
+| Play with it on a laptop | kind, with fake GPUs | [Testing](docs/testing.md) |
+
+Replay prints what would change, next to stock KAI:
+
+```
+JOB            OWNER  CLASS  UNITS  STATE    TIER      PRIORITY     STOCK   WITH PLUGIN  REASON
+team/pg-eval2  bob    high   2      pending  held      75           placed  -            needs 2 units, using 4 of 4
+team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
+```
+
+## Documentation
+
+| For | Page |
 |---|---|
-| Budgeted | Runs up to the owner's budget. Beyond that it stays pending, with the reason in its events. Whatever fits starts, oldest first. |
-| Charged | Counts against the budget but is never held, for example an interactive workspace. |
-| Promotable | While it runs, it may use budget that is free, and is then promoted. Otherwise the first units up to the allowance keep their priority and the rest are excess. |
-| Any other | Untouched. |
+| Everyone | [Concepts](docs/concepts.md): the rules, with examples |
+| People who submit jobs | [User guide](docs/user-guide.md): why is my job waiting? |
+| Cluster admins | [Install](docs/install.md): replay, audit, enforce, roll back |
+| | [Configuration](docs/configuration.md): every setting |
+| | [Security](docs/security.md): keep people from evading the rules |
+| | [Observability](docs/observability.md): metrics and the status endpoint |
+| | [Troubleshooting](docs/troubleshooting.md) |
+| Developers | [Architecture](docs/architecture.md), [Testing](docs/testing.md) |
 
-- Promotion goes to the longest running jobs, and the allowance to the earliest
-  submitted. Tiers are recalculated every scheduling cycle and nothing is stored.
-- Waiting budgeted jobs that fit the budget take precedence over promotion. One that
-  does not fit leaves promotion alone.
-- Only KAI's in-memory priority changes. Pods and PodGroups keep theirs, and a
-  priority change does not restart anything by itself.
-- Budgets are in units: GPUs times a weight by GPU type. A running job is charged in
-  full. Requests by GPU memory count as whole GPUs. Jobs without GPUs are ignored.
-- A budgeted job without an owner is held, and a promotable one is excess.
-- If the configuration is invalid or the plugin fails, KAI's stock behaviour applies.
+## Status
 
-## Configuration
-
-Set these as arguments of the plugin, all as strings. See
-[test/smoke/values.yaml](test/smoke/values.yaml) for Helm values.
-
-| Argument | Default | Meaning |
-|---|---|---|
-| `mode` | `audit` | `audit` only logs decisions; `enforce` applies them |
-| `ownerLabel` | required | Label that names the owner |
-| `budgetedClasses` | required | Comma-separated priority classes |
-| `chargedClasses` | none | |
-| `promotableClasses` | none | |
-| `budget` | required | Units per owner |
-| `allowance` | required with `promotableClasses` | Units per owner that keep their priority |
-| `promotedPriority`, `excessPriority` | required with `promotableClasses` | |
-| `largeJobs` | `excess` | For a job larger than the allowance: `excess`, or `normal-if-first` to keep its priority if nothing of its owner's is ahead of it |
-| `gpuTypeLabel` | none | nodeSelector key with the GPU type |
-| `gpuWeights` | none | `type=weight`, comma-separated |
-| `defaultGPUWeight` | `1` | Weight of other types, and of pods that do not select one |
-| `consolidation` | see below | Consolidation passes |
-| `jobMetrics` | `false` | `true` adds a metric for each job |
-| `protectedPriority` | `promotedPriority` | See below. Required if there are neither promotable classes nor passes |
-
-Arguments replace the defaults of an installation as a whole, so list them all.
-
-### Consolidation
-
-KAI's consolidation may restart a running job of any priority to place any other.
-Disable its `consolidation` action and enable `ukai-consolidation`. In `audit` mode it
-behaves like KAI's.
-
-By default it may place any job, but does not move running jobs that are budgeted,
-charged, promoted, or of `protectedPriority` or higher. To choose, list passes as
-`classes to place > classes to move`, separated by `;`:
-
-    consolidation: "high > high,mid,low; mid,low > mid,low"
-
-`@promoted` stands for promoted jobs, which do not count as their class. Classes that
-are not listed are neither placed nor moved. Each pass has its own search budget. A
-partly running job counts as running.
-
-KAI disables its consolidation for spread placement. This action must then be disabled
-by hand.
-
-## Observing
-
-In both modes; in `audit` mode, tiers and priorities are what they would be.
-
-KAI's `/metrics` also has:
-
-| Metric | Labels | Meaning |
-|---|---|---|
-| `ukai_active` | `mode` | 1, or 0 if stock behaviour applies because of an error |
-| `ukai_last_session_timestamp_seconds` | | When the last scheduling cycle began |
-| `ukai_panics_total` | | Should stay 0 |
-| `ukai_owner_budget_units` | | Budget of each owner |
-| `ukai_jobs`, `ukai_units` | `owner`, `tier`, `state` | `state` is `running` or `pending` |
-| `ukai_tier_changes_total` | `from`, `to` | Steady growth without new jobs means tiers flap |
-| `ukai_job_priority` | `namespace`, `podgroup`, `owner`, `tier` | With `jobMetrics` |
-
-Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Use of the budget is
-`ukai_units{tier="budget",state="running"}`.
-
-KAI's plugin server lists every job, with the reason if it is held. It listens on
-localhost only:
-
-    kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
-    curl 'localhost:8081/tiers?owner=alice'
-
-## Trying it without installing
-
-`replay` runs one scheduling cycle on a snapshot of a cluster, as stock KAI and with
-the plugin, and lists the jobs that would be treated differently. It runs offline.
-
-    kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
-    curl localhost:8081/get-snapshot -o snapshot.zip
-    go run ./cmd/replay -snapshot snapshot.zip -arguments arguments.yaml
-
-`arguments.yaml` is a map of the arguments above. A snapshot has full pod specs and
-ConfigMaps, which may contain secrets. Take it from KAI v0.18.9. Preemption that would
-take several cycles is not shown.
-
-## Rolling back
-
-To stop enforcing, set `mode: audit` and restart the scheduler: held jobs start, and
-running ones are not touched. To return to stock KAI, remove the plugin, the action and
-the image together, as `helm upgrade` without these values does. The stock image does
-not start while its configuration names `ukai-consolidation`.
-
-## Limits
-
-- Users who can set the owner label or the priority class can evade the rules. Guard
-  both with an admission policy.
-- An evicted Job whose program exits 0 on SIGTERM counts as complete and does not run
-  again.
-- A stream of small budgeted jobs can delay a large one of the same owner.
-
-## Building
-
-    CGO_ENABLED=0 go build ./cmd/scheduler
-
-`go install` by version does not work, because KAI needs `replace` directives. KAI's
-chart has one registry for all images, so either mirror them next to this one, or set
-the scheduler's image in the KAI `Config` resource.
-
-## Testing
-
-    go test ./...                      # SIMULATIONS=100 for a longer simulation
-    KEEP=1 CLUSTER=ukai-dev test/smoke/run.sh   # kind cluster
-    test/e2e/run.sh                    # on that cluster, with fake GPUs
-    test/upgrade/run.sh                # installing and rolling back, there too
+**Not yet used in production.** Tested with KAI v0.18.9 on kind with fake GPUs, on arm64 and
+amd64. Not tested with real GPUs or other KAI versions. See [what is tested](docs/testing.md).
 
 ## License
 
-[Apache-2.0](LICENSE). KAI Scheduler is also licensed under Apache-2.0. Images include its LICENSE and NOTICE.
+[Apache-2.0](LICENSE). An independent project, not affiliated with KAI Scheduler or NVIDIA.
+KAI Scheduler is also licensed under Apache-2.0; images include its LICENSE and NOTICE.

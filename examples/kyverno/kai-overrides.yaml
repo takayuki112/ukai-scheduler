@@ -1,0 +1,52 @@
+# KAI lets labels and annotations override a job's priority class, and whether and when
+# it may be evicted, or name its PodGroup. Policies on priorityClassName in the pod spec
+# do not see them. Add every custom workload type that users may submit: KAI reads them
+# from all of a pod's owners.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-kai-overrides
+  annotations: {pod-policies.kyverno.io/autogen-controllers: none}
+spec:
+  background: false
+  rules:
+    - name: labels
+      match:
+        any:
+          - resources: {kinds: &kinds [Pod, Job, CronJob, Deployment, StatefulSet, ReplicaSet], operations: [CREATE, UPDATE]}
+      preconditions:
+        all:
+          # Controllers copy labels, so pods are checked whoever creates them.
+          - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:node:*"}
+          - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:serviceaccount:kai-scheduler:*"}
+      validate:
+        failureAction: Enforce
+        message: labels priorityClassName and kai.scheduler/preemptibility are not allowed
+        deny:
+          conditions:
+            any:
+              - key: "{{ keys(request.object.metadata.labels || `{}`) }}"
+                operator: AnyIn
+                value: [priorityClassName, kai.scheduler/preemptibility]
+    - name: annotations
+      match:
+        any:
+          - resources: {kinds: *kinds, operations: [CREATE, UPDATE]}
+      preconditions:
+        all:
+          - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:*"}
+      validate:
+        failureAction: Enforce
+        message: KAI annotations that delay eviction or choose a PodGroup are not allowed
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.metadata.annotations.\"kai.scheduler/preemption-delay\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.metadata.annotations.\"kai.scheduler/preemption-delay\" || '' }}"
+              - key: "{{ request.object.metadata.annotations.\"kai.scheduler/staleness-grace-period\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.metadata.annotations.\"kai.scheduler/staleness-grace-period\" || '' }}"
+              - key: "{{ request.object.metadata.annotations.\"pod-group-name\" || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.metadata.annotations.\"pod-group-name\" || '' }}"

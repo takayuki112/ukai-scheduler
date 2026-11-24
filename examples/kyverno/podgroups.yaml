@@ -1,0 +1,28 @@
+# The scheduler reads a job's owner and class from its PodGroup, which KAI creates. Only
+# KAI and the garbage collector may write them. Prefer RBAC without write access to
+# podgroups; this is for roles such as "edit" that cannot be changed.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: protect-podgroups
+spec:
+  background: false
+  rules:
+    - name: only-kai
+      match:
+        any:
+          - resources:
+              kinds: [scheduling.run.ai/*/PodGroup]
+              operations: [CREATE, UPDATE, DELETE]
+      exclude:
+        any:
+          - subjects: [{kind: Group, name: "system:serviceaccounts:kai-scheduler"}]
+          - subjects: [{kind: Group, name: "system:masters"}]
+          - subjects: [{kind: User, name: "system:serviceaccount:kube-system:generic-garbage-collector"}]
+          - subjects: [{kind: User, name: "system:serviceaccount:kube-system:namespace-controller"}]
+      validate:
+        failureAction: Enforce
+        # Otherwise it lets through updates of any PodGroup, as all of them violate it.
+        allowExistingViolations: false
+        message: PodGroups are managed by KAI Scheduler
+        deny: {}

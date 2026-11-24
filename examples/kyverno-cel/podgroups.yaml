@@ -1,0 +1,21 @@
+# As in ../kyverno/podgroups.yaml, for Kyverno 1.20 or later.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: protect-podgroups
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [scheduling.run.ai], apiVersions: ["*"], resources: [podgroups], operations: [CREATE, UPDATE, DELETE]}
+  matchConditions:
+    - name: not-kai
+      expression: "!request.userInfo.groups.exists(g, g == 'system:serviceaccounts:kai-scheduler' || g == 'system:masters')"
+    - name: not-collector
+      expression: "!(request.userInfo.username in ['system:serviceaccount:kube-system:generic-garbage-collector', 'system:serviceaccount:kube-system:namespace-controller'])"
+  validations:
+    - message: PodGroups are managed by KAI Scheduler
+      expression: >-
+        'false' == 'true'

@@ -9,8 +9,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - run: test -z "$(gofmt -l .)"
@@ -18,13 +18,22 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
       - run: CGO_ENABLED=0 go build ./...
-  e2e:
+  cluster:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - test/e2e/run.sh
+          - test/upgrade/run.sh
+          - test/failure/run.sh
+          - KYVERNO_CHART=3.7.0 POLICIES=examples/kyverno test/kyverno/run.sh
+          - KYVERNO_CHART=3.10.0 POLICIES=examples/kyverno-cel test/kyverno/run.sh
     env:
       CLUSTER: ukai-dev
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install kind
@@ -33,4 +42,4 @@ jobs:
           curl -fsSL https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64.sha256sum | awk '{print $1"  kind"}' | sha256sum -c -
           sudo install kind /usr/local/bin/kind
       - run: KEEP=1 ./test/smoke/run.sh
-      - run: ./test/e2e/run.sh
+      - run: ${{ matrix.suite }}

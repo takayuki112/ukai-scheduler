@@ -1,0 +1,19 @@
+# As in ../kyverno/exempt-class.yaml, for Kyverno 1.20 or later. Adapt the class and the owners.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-exempt-class
+spec:
+  validationActions: [Deny] # Audit first
+  evaluation: {background: {enabled: false}}
+  autogen: {podControllers: {controllers: []}}
+  matchConstraints:
+    resourceRules:
+      - {apiGroups: [""], apiVersions: ["*"], resources: [pods], operations: [CREATE]}
+  matchConditions:
+    - name: exempt-class
+      expression: "has(object.spec.priorityClassName) && object.spec.priorityClassName == 'test-top'"
+  validations:
+    - message: this priority class is restricted
+      expression: >-
+        (has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels ? object.metadata.labels['example.com/owner'] : '') in ['carol']
