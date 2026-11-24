@@ -39,12 +39,14 @@ done
 cleanup() { kubectl delete jobs -l ukai-test --wait=true --timeout=90s >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-submit() { # name owner class gpus
+submit() { # name owner class gpus [pods, as a gang]
   kubectl create -f - >/dev/null <<Y
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/owner: $2}}
+metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/owner: $2}, annotations: {kai.scheduler/batch-min-member: "${5:-1}"}}
 spec:
+  parallelism: ${5:-1}
+  completions: ${5:-1}
   template:
     metadata: {labels: {ukai-test: "1", kai.scheduler/queue: default-queue}}
     spec:
@@ -133,6 +135,32 @@ fragment low
 submit w carol low 4; expect w Running; expect m1 Running; expect m2 Running
 [ "$(uid m1)$(uid m2)" != "$u" ] || { echo "FAIL: nothing was moved"; exit 1; }
 echo "  ok: one was moved"
+
+echo "10. Consolidation for a P1 moves a P1, as the passes allow"
+fragment() { # two P1 of 1 GPU, on nodes of 2
+  cleanup
+  gpus "$CLUSTER-worker" 1; gpus "$CLUSTER-worker2" 0
+  submit m1 alice high 1; expect m1 Running
+  gpus "$CLUSTER-worker2" 1; gpus "$CLUSTER-worker" 1
+  submit m2 bob high 1; expect m2 Running
+  gpus "$CLUSTER-worker" 2; gpus "$CLUSTER-worker2" 2
+  u=$(uid m1)$(uid m2)
+}
+fragment
+submit w carol high 2; expect w Running; expect m1 Running; expect m2 Running
+[ "$(uid m1)$(uid m2)" != "$u" ] || { echo "FAIL: nothing was moved"; exit 1; }
+echo "  ok: one was moved"
+
+cleanup
+gpus "$CLUSTER-worker" 4; gpus "$CLUSTER-worker2" 4
+count() { kubectl get pods -l "job-name=$1" --field-selector="status.phase=$2" --no-headers 2>/dev/null | wc -l | tr -d ' '; }
+echo "11. A gang is charged as a whole"
+submit big alice high 1 3; expect big Pending # 3 units, budget is 2
+[ "$(count big Running)" = 0 ] || { echo "FAIL: part of the gang runs"; exit 1; }
+submit g alice high 1 2; expect g Running
+[ "$(count g Running)" = 2 ] || { echo "FAIL: the gang is not complete"; exit 1; }
+submit a1 alice high 1; expect a1 Pending
+echo "  ok: gangs of 3 held, of 2 complete"
 
 kubectl -n $NS logs deployment/kai-scheduler-default --tail=-1 >"$WORK/scheduler.log"
 if grep -E 'Plugin tierbudget.*(panic|is disabled)' "$WORK/scheduler.log"; then echo "FAIL: errors logged"; exit 1; fi

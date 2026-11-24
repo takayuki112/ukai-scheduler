@@ -47,9 +47,10 @@ type testJob struct {
 	name, owner, class string
 	gpus               float64 // per pod
 	pods               []pod_status.PodStatus
-	node               string // for pods that are not pending; default n0
-	age                int    // minutes since creation
-	started            int    // minutes since start, if running; default age
+	node               string   // for pods that are not pending; default n0
+	nodes              []string // if set, each pod\'s node
+	age                int      // minutes since creation
+	started            int      // minutes since start, if running; default age
 }
 
 // j is a job of one pod.
@@ -76,12 +77,15 @@ func session(t *testing.T, nodes map[string]int, jobs []testJob) *framework.Sess
 			Name: tj.name, QueueName: "q", RequiredGPUsPerTask: tj.gpus,
 			Priority: classPriority[tj.class], JobAgeInMinutes: tj.age,
 		}
-		for _, status := range tj.pods {
+		for i, status := range tj.pods {
 			task := &tasks_fake.TestTaskBasic{State: status}
 			if status != pending {
 				task.NodeName = tj.node
 				if tj.node == "" {
 					task.NodeName = "n0"
+				}
+				if tj.nodes != nil {
+					task.NodeName = tj.nodes[i]
 				}
 			}
 			job.Tasks = append(job.Tasks, task)

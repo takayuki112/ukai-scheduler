@@ -28,13 +28,14 @@ const (
 	argGPUTypeLabel     = "gpuTypeLabel"      // nodeSelector key; default: none, so every GPU has the default weight
 	argGPUWeights       = "gpuWeights"        // type=weight, comma-separated; needs gpuTypeLabel
 	argConsolidation    = "consolidation"     // passes, see Pass; default: never move budgeted, charged or promoted jobs
+	argProtected        = "protectedPriority" // without consolidation passes, running jobs from this priority up are not moved; default promotedPriority
 	argDefaultWeight    = "defaultGPUWeight"  // units per GPU of any other type; default 1
 )
 
 var knownArgs = []string{
 	argMode, argOwnerLabel, argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
 	argPromotedPriority, argExcessPriority, argLargeJobs, argGPUTypeLabel, argGPUWeights, argDefaultWeight,
-	argConsolidation,
+	argConsolidation, argProtected,
 }
 
 // Mode says whether decisions take effect.
@@ -60,6 +61,8 @@ type Config struct {
 	DefaultWeight float64
 	// Passes are the consolidation passes. None means the default rule.
 	Passes []Pass
+	// ProtectedPriority is part of the default rule.
+	ProtectedPriority int32
 }
 
 // ParseConfig reads plugin arguments. The error lists every problem found.
@@ -97,6 +100,10 @@ func ParseConfig(args framework.PluginArguments) (*Config, error) {
 		if len(p.errs) == 0 && c.Policy.ExcessPriority >= c.Policy.PromotedPriority {
 			p.failf("%s must be below %s", argExcessPriority, argPromotedPriority)
 		}
+	}
+	c.ProtectedPriority = c.Policy.PromotedPriority
+	if p.get(argProtected) != "" || p.get(argPromotable) == "" && len(c.Passes) == 0 {
+		c.ProtectedPriority = p.priority(argProtected)
 	}
 	if c.GPUTypeLabel == "" && len(c.GPUWeights) > 0 {
 		p.failf("%s needs %s", argGPUWeights, argGPUTypeLabel)

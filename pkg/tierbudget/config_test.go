@@ -30,7 +30,7 @@ func TestParseConfig(t *testing.T) {
 		Mode: Enforce, OwnerLabel: "example.com/owner",
 		Classes:      map[string]tiers.Class{"high": tiers.Budgeted, "workspace": tiers.Charged, "mid": tiers.Promotable, "mid-alt": tiers.Promotable},
 		Policy:       tiers.Policy{Budget: 4000, Allowance: 4500, PromotedPriority: 75, ExcessPriority: 45, LargeJobs: tiers.LargeNormalIfFirst},
-		GPUTypeLabel: "gpu-type", GPUWeights: map[string]float64{"small": 1, "big": 2.5}, DefaultWeight: 4,
+		GPUTypeLabel: "gpu-type", GPUWeights: map[string]float64{"small": 1, "big": 2.5}, DefaultWeight: 4, ProtectedPriority: 75,
 		Passes: []Pass{{Place: []string{"high"}, Move: []string{"high", "low"}}, {Place: []string{"mid", "low"}, Move: []string{"mid", "@promoted"}}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -39,7 +39,7 @@ func TestParseConfig(t *testing.T) {
 }
 
 func TestParseConfigDefaults(t *testing.T) {
-	c, err := ParseConfig(framework.PluginArguments{"ownerLabel": "o", "budgetedClasses": "high", "budget": "4"})
+	c, err := ParseConfig(framework.PluginArguments{"ownerLabel": "o", "budgetedClasses": "high", "budget": "4", "protectedPriority": "75"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +76,7 @@ func TestParseConfigErrors(t *testing.T) {
 		{"consolidation", "high>low;", "not place>move"},
 		{"consolidation", "high>low,low", "more than once"},
 		{"consolidation", "high>@normal", "unknown group"},
+		{"protectedPriority", "x", "protectedPriority: "},
 		{"budgett", "4", "budgett: unknown"},
 	} {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
@@ -86,6 +87,19 @@ func TestParseConfigErrors(t *testing.T) {
 				t.Errorf("got %v, %v; want error with %q", c, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestProtectedPriority(t *testing.T) {
+	args := validArgs()
+	args["protectedPriority"] = "60"
+	if c, err := ParseConfig(args); err != nil || c.ProtectedPriority != 60 {
+		t.Errorf("got %v, %v", c, err)
+	}
+	// Nothing to default to, and no passes that say what may move.
+	_, err := ParseConfig(framework.PluginArguments{"ownerLabel": "o", "budgetedClasses": "high", "budget": "4"})
+	if err == nil || !strings.Contains(err.Error(), "protectedPriority: required") {
+		t.Errorf("got %v", err)
 	}
 }
 

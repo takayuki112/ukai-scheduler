@@ -38,6 +38,7 @@ func TestConsolidation(t *testing.T) {
 		{"default: P1 does not move P1", "", "4", fragmented("high", "high", high), false, []string{"a", "b"}},
 		{"default: P3 does not move promoted", "", "2", fragmented("mid", "mid", low), false, []string{"a", "b"}},
 		{"default: P3 does not move workspaces", "", "4", fragmented("workspace", "workspace", low), false, []string{"a", "b"}},
+		{"default: P3 does not move P0", "", "4", fragmented("top", "top", low), false, []string{"a", "b"}},
 		{"default: P3 moves P3 and not P1", "", "4", fragmented("high", "low", low), true, []string{"a"}},
 		{"default: P1 moves P3", "", "4", fragmented("low", "low", high), true, nil},
 		{"default: P3 moves P2 that is not promoted", "", "0", fragmented("mid", "mid", low), true, nil},

@@ -81,13 +81,18 @@ func (a *consolidationAction) runPass(ssn *framework.Session, allowed func(*podg
 	a.stock.Execute(ssn)
 }
 
-// allowedByDefault protects running jobs that are budgeted, charged or promoted.
+// allowedByDefault protects running jobs that are budgeted, charged or promoted, or that
+// have a protected priority. The last covers classes above the budgeted ones, which
+// need not be in the configuration.
 func (p *plugin) allowedByDefault(info *podgroup_info.PodGroupInfo) bool {
-	state := p.jobs[info.UID]
-	if state == nil || info.GetActiveAllocatedTasksCount() == 0 {
+	if info.GetActiveAllocatedTasksCount() == 0 {
 		return true
 	}
-	return state.class != tiers.Budgeted && state.class != tiers.Charged && !p.promoted(info)
+	if info.Priority >= p.config.ProtectedPriority || p.promoted(info) {
+		return false
+	}
+	state := p.jobs[info.UID]
+	return state == nil || state.class == tiers.Promotable
 }
 
 // allowedIn says whether a job takes part in a pass. A job that is partly running must
