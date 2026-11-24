@@ -1,0 +1,4 @@
+FROM scratch
+COPY scheduler LICENSE NOTICE /
+USER 65532:65532
+ENTRYPOINT ["/scheduler"]

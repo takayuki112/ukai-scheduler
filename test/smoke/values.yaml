@@ -1,0 +1,9 @@
+# The chart has no per-component registry: every image uses global.registry.
+scheduler:
+  image:
+    name: ukai-scheduler
+    tag: smoke
+    pullPolicy: Never
+  plugins:
+    tierbudget:
+      priority: 50
