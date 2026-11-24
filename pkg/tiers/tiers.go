@@ -129,7 +129,7 @@ func (p Policy) assignUnowned(jobs []*Job, results map[string]Result) {
 		case j.Class == Promotable:
 			results[j.ID] = p.excess(j)
 		case j.Class == Budgeted && !j.Running:
-			results[j.ID] = Result{Tier: Held, Priority: j.Priority, Reason: "no owner"}
+			results[j.ID] = Result{Tier: Held, Priority: j.Priority, Reason: "no user"}
 		default:
 			results[j.ID] = Result{Tier: Budget, Priority: j.Priority}
 		}

@@ -68,7 +68,7 @@ spec:
           - {key: "{{ request.userInfo.username }}", operator: NotEquals, value: "system:*"}
       validate:
         failureAction: Enforce
-        message: the owner label cannot be changed
+        message: the user label cannot be changed
         deny:
           conditions:
             any:
@@ -82,7 +82,7 @@ spec:
       preconditions: *users2
       validate:
         failureAction: Enforce
-        message: the owner label cannot be changed
+        message: the user label cannot be changed
         deny:
           conditions:
             any:
@@ -96,7 +96,7 @@ spec:
       preconditions: *users2
       validate:
         failureAction: Enforce
-        message: the owner label cannot be changed
+        message: the user label cannot be changed
         deny:
           conditions:
             any:

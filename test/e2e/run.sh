@@ -85,7 +85,7 @@ echo "1. A P1 over its owner's budget is held, with a reason, while GPUs are fre
 submit a1 alice high 2; expect a1 Running
 submit a2 alice high 1; expect a2 Pending
 events=$(kubectl get events -o jsonpath='{range .items[*]}{.message}{"\n"}{end}')
-grep -q 'owner budget: needs 1 units, using 2 of 2' <<<"$events" || { echo "FAIL: no reason in events"; exit 1; }
+grep -q 'user budget: needs 1 units, using 2 of 2' <<<"$events" || { echo "FAIL: no reason in events"; exit 1; }
 echo "  ok: reason is in the events"
 echo "2. Another owner is not affected"
 submit b1 bob high 2; expect b1 Running

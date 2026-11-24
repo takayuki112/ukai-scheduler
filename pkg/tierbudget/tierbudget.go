@@ -293,7 +293,7 @@ func (p *plugin) hold(task *pod_info.PodInfo) string {
 		if job.running {
 			return ""
 		}
-		return fmt.Sprintf("no owner: label %s is not set", p.config.OwnerLabel)
+		return fmt.Sprintf("no user: label %s is not set", p.config.OwnerLabel)
 	}
 	var used tiers.Units
 	for _, other := range p.charged[job.owner] {
@@ -331,7 +331,7 @@ func (p *plugin) victimInvariantPrePredicate(task *pod_info.PodInfo) (failure *a
 	return nil
 }
 
-func holdError(reason string) error { return fmt.Errorf("owner budget: %s", reason) }
+func holdError(reason string) error { return fmt.Errorf("user budget: %s", reason) }
 
 // report logs jobs whose tier changed.
 func (p *plugin) report(results map[string]tiers.Result) {
@@ -346,7 +346,7 @@ func (p *plugin) report(results map[string]tiers.Result) {
 		} else if o := p.orphans[common_info.PodGroupID(id)]; o != nil {
 			owner, text = o.owner, text+" (its PodGroup is gone)"
 		}
-		log.InfraLogger.Infof("Plugin %s (%s): job %s of owner %q is %s", Name, p.config.Mode, id, owner, text)
+		log.InfraLogger.Infof("Plugin %s (%s): job %s of user %q is %s", Name, p.config.Mode, id, owner, text)
 	}
 }
 

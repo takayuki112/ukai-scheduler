@@ -42,7 +42,7 @@ promotedPriority: "75"
 excessPriority: "45"
 ```
 
-Look for jobs that are unexpectedly held, jobs whose `OWNER` is `-` (no label for the user), and evictions. `-all`
+Look for jobs that are unexpectedly held, jobs whose `USER` is `-` (no label for the user), and evictions. `-all`
 lists every managed job. It does not show preemption that takes several cycles.
 
 ## 2. Build the image

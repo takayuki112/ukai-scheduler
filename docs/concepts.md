@@ -96,7 +96,7 @@ lower priority, lowest first.
 
 ### A P1 that is too large
 
-With 2 of 4 units in use, a P1 of 4 is held: `owner budget: needs 4 units, using 2 of 4`.
+With 2 of 4 units in use, a P1 of 4 is held: `user budget: needs 4 units, using 2 of 4`.
 Promotions stay, and a P1 of 2 behind it starts.
 
 ### Who can evict whom?

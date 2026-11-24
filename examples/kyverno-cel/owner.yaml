@@ -95,7 +95,7 @@ spec:
     - name: users
       expression: "!request.userInfo.username.startsWith('system:')"
   validations:
-    - message: the owner label cannot be changed
+    - message: the user label cannot be changed
       expression: >-
         (has(object.metadata) && has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels ? object.metadata.labels['example.com/owner'] : '') == (has(oldObject.metadata) && has(oldObject.metadata.labels) && 'example.com/owner' in oldObject.metadata.labels ? oldObject.metadata.labels['example.com/owner'] : '')
 ---
@@ -115,7 +115,7 @@ spec:
     - name: users
       expression: "!request.userInfo.username.startsWith('system:')"
   validations:
-    - message: the owner label cannot be changed
+    - message: the user label cannot be changed
       expression: >-
         (has(object.spec) && has(object.spec.template) && has(object.spec.template.metadata) && has(object.spec.template.metadata.labels) && 'example.com/owner' in object.spec.template.metadata.labels ? object.spec.template.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.template) && has(oldObject.spec.template.metadata) && has(oldObject.spec.template.metadata.labels) && 'example.com/owner' in oldObject.spec.template.metadata.labels ? oldObject.spec.template.metadata.labels['example.com/owner'] : '')
 ---
@@ -134,10 +134,10 @@ spec:
     - name: users
       expression: "!request.userInfo.username.startsWith('system:')"
   validations:
-    - message: the owner label cannot be changed
+    - message: the user label cannot be changed
       expression: >-
         (has(object.spec) && has(object.spec.jobTemplate) && has(object.spec.jobTemplate.metadata) && has(object.spec.jobTemplate.metadata.labels) && 'example.com/owner' in object.spec.jobTemplate.metadata.labels ? object.spec.jobTemplate.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.jobTemplate) && has(oldObject.spec.jobTemplate.metadata) && has(oldObject.spec.jobTemplate.metadata.labels) && 'example.com/owner' in oldObject.spec.jobTemplate.metadata.labels ? oldObject.spec.jobTemplate.metadata.labels['example.com/owner'] : '')
-    - message: the owner label cannot be changed
+    - message: the user label cannot be changed
       expression: >-
         (has(object.spec) && has(object.spec.jobTemplate) && has(object.spec.jobTemplate.spec) && has(object.spec.jobTemplate.spec.template) && has(object.spec.jobTemplate.spec.template.metadata) && has(object.spec.jobTemplate.spec.template.metadata.labels) && 'example.com/owner' in object.spec.jobTemplate.spec.template.metadata.labels ? object.spec.jobTemplate.spec.template.metadata.labels['example.com/owner'] : '') == (has(oldObject.spec) && has(oldObject.spec.jobTemplate) && has(oldObject.spec.jobTemplate.spec) && has(oldObject.spec.jobTemplate.spec.template) && has(oldObject.spec.jobTemplate.spec.template.metadata) && has(oldObject.spec.jobTemplate.spec.template.metadata.labels) && 'example.com/owner' in oldObject.spec.jobTemplate.spec.template.metadata.labels ? oldObject.spec.jobTemplate.spec.template.metadata.labels['example.com/owner'] : '')
 ---
@@ -166,11 +166,11 @@ spec:
         has(object.spec.jobTemplate) ? object.spec.jobTemplate.spec.template :
         has(object.spec.template) ? object.spec.template : object
   validations:
-    - message: the owner label must name the user
+    - message: the user label must name who submits
       expression: >-
         has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels &&
         object.metadata.labels['example.com/owner'] == variables.owner
-    - message: the owner label of the pod template must name the user
+    - message: the user label of the pod template must name who submits
       expression: >-
         has(variables.template.metadata) && has(variables.template.metadata.labels) &&
         'example.com/owner' in variables.template.metadata.labels &&

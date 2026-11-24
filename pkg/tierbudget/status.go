@@ -154,7 +154,7 @@ var (
 		"1 if the plugin works, 0 if stock behaviour applies because of an error", []string{"mode"}, nil)
 	sessionDesc = prometheus.NewDesc("ukai_last_session_timestamp_seconds",
 		"When the last session opened", nil, nil)
-	budgetDesc = prometheus.NewDesc("ukai_owner_budget_units", "Budget of each owner", nil, nil)
+	budgetDesc = prometheus.NewDesc("ukai_owner_budget_units", "Budget of each user", nil, nil)
 	jobsDesc   = prometheus.NewDesc("ukai_jobs", "Jobs by effective tier", []string{"owner", "tier", "state"}, nil)
 	unitsDesc  = prometheus.NewDesc("ukai_units", "Units of jobs by effective tier", []string{"owner", "tier", "state"}, nil)
 	jobDesc    = prometheus.NewDesc("ukai_job_priority", "Effective priority of each job",

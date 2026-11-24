@@ -79,7 +79,7 @@ If the configuration is wrong or the plugin fails, the scheduler behaves as stoc
 Replay prints what would change, next to stock KAI:
 
 ```
-JOB            OWNER  CLASS  UNITS  STATE    TIER      PRIORITY     STOCK   WITH PLUGIN  REASON
+JOB            USER   CLASS  UNITS  STATE    TIER      PRIORITY     STOCK   WITH PLUGIN  REASON
 team/pg-eval2  bob    high   2      pending  held      75           placed  -            needs 2 units, using 4 of 4
 team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
 ```

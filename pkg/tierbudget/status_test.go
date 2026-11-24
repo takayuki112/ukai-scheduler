@@ -82,7 +82,7 @@ func TestMetrics(t *testing.T) {
 # HELP ukai_active 1 if the plugin works, 0 if stock behaviour applies because of an error
 # TYPE ukai_active gauge
 ukai_active{mode="enforce"} 1
-# HELP ukai_owner_budget_units Budget of each owner
+# HELP ukai_owner_budget_units Budget of each user
 # TYPE ukai_owner_budget_units gauge
 ukai_owner_budget_units 2
 # HELP ukai_jobs Jobs by effective tier

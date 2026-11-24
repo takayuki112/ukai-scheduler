@@ -311,7 +311,7 @@ func TestHoldReasonReachesUser(t *testing.T) {
 	for _, e := range a2.TasksFitErrors {
 		text += e.Error()
 	}
-	if want := "owner budget: needs 1 units, using 2 of 2"; !strings.Contains(text, want) {
+	if want := "user budget: needs 1 units, using 2 of 2"; !strings.Contains(text, want) {
 		t.Errorf("%q lacks %q", text, want)
 	}
 }
