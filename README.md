@@ -100,6 +100,13 @@ localhost only:
     kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
     curl 'localhost:8081/tiers?owner=alice'
 
+## Rolling back
+
+To stop enforcing, set `mode: audit` and restart the scheduler: held jobs start, and
+running ones are not touched. To return to stock KAI, remove the plugin, the action and
+the image together, as `helm upgrade` without these values does. The stock image does
+not start while its configuration names `ukai-consolidation`.
+
 ## Limits
 
 - Users who can set the owner label or the priority class can evade the rules. Guard
@@ -121,6 +128,7 @@ the scheduler's image in the KAI `Config` resource.
     go test ./...                      # SIMULATIONS=100 for a longer simulation
     KEEP=1 CLUSTER=ukai-dev test/smoke/run.sh   # kind cluster
     test/e2e/run.sh                    # on that cluster, with fake GPUs
+    test/upgrade/run.sh                # installing and rolling back, there too
 
 ## License
 
