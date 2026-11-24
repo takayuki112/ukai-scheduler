@@ -96,6 +96,6 @@ the scheduler's image in the KAI `Config` resource.
     KEEP=1 CLUSTER=ukai-dev test/smoke/run.sh   # kind cluster
     test/e2e/run.sh                    # on that cluster, with fake GPUs
 
-## Third-party
+## License
 
-KAI Scheduler is licensed under Apache-2.0. Images include its LICENSE and NOTICE.
+[Apache-2.0](LICENSE). KAI Scheduler is also licensed under Apache-2.0. Images include its LICENSE and NOTICE.
