@@ -3,10 +3,15 @@ module github.com/takayuki112/ukai-scheduler
 go 1.26.10
 
 require (
+	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.1.2
 	github.com/kai-scheduler/KAI-scheduler v0.18.9
 	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/mock v0.6.0
 	k8s.io/api v0.36.2
+	k8s.io/apimachinery v0.36.2
+	k8s.io/client-go v0.35.4
+	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -71,7 +76,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.1.2 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
@@ -139,11 +143,9 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.35.4 // indirect
-	k8s.io/apimachinery v0.36.2 // indirect
 	k8s.io/apiserver v0.35.4 // indirect
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.5.1 // indirect
 	k8s.io/cli-runtime v0.35.4 // indirect
-	k8s.io/client-go v0.35.4 // indirect
 	k8s.io/cloud-provider v0.35.4 // indirect
 	k8s.io/cluster-bootstrap v0.35.4 // indirect
 	k8s.io/component-base v0.35.4 // indirect
@@ -168,13 +170,11 @@ require (
 	k8s.io/mount-utils v0.35.4 // indirect
 	k8s.io/pod-security-admission v0.35.4 // indirect
 	k8s.io/sample-apiserver v0.35.4 // indirect
-	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5 // indirect
 	knative.dev/pkg v0.0.0-20260120122510-4a022ed9999a // indirect
 	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
 // KAI replaces these in its own go.mod. Replace directives are not inherited,

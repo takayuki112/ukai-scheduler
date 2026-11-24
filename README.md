@@ -100,6 +100,19 @@ localhost only:
     kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
     curl 'localhost:8081/tiers?owner=alice'
 
+## Trying it without installing
+
+`replay` runs one scheduling cycle on a snapshot of a cluster, as stock KAI and with
+the plugin, and lists the jobs that would be treated differently. It runs offline.
+
+    kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
+    curl localhost:8081/get-snapshot -o snapshot.zip
+    go run ./cmd/replay -snapshot snapshot.zip -arguments arguments.yaml
+
+`arguments.yaml` is a map of the arguments above. A snapshot has full pod specs and
+ConfigMaps, which may contain secrets. Take it from KAI v0.18.9. Preemption that would
+take several cycles is not shown.
+
 ## Rolling back
 
 To stop enforcing, set `mode: audit` and restart the scheduler: held jobs start, and

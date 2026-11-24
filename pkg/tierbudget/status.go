@@ -61,6 +61,9 @@ var (
 
 func init() { prometheus.MustRegister(tierChanges, panicCount, collector{}) }
 
+// LastStatus returns the status of the last session, or nil before the first.
+func LastStatus() *Status { return lastStatus.Load() }
+
 // buildStatus must run before priorities are changed.
 func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 	s := &Status{
