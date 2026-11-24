@@ -51,6 +51,7 @@ Set these as arguments of the plugin, all as strings. See
 | `gpuWeights` | none | `type=weight`, comma-separated |
 | `defaultGPUWeight` | `1` | Weight of other types, and of pods that do not select one |
 | `consolidation` | see below | Consolidation passes |
+| `jobMetrics` | `false` | `true` adds a metric for each job |
 | `protectedPriority` | `promotedPriority` | See below. Required if there are neither promotable classes nor passes |
 
 Arguments replace the defaults of an installation as a whole, so list them all.
@@ -73,6 +74,31 @@ partly running job counts as running.
 
 KAI disables its consolidation for spread placement. This action must then be disabled
 by hand.
+
+## Observing
+
+In both modes; in `audit` mode, tiers and priorities are what they would be.
+
+KAI's `/metrics` also has:
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `ukai_active` | `mode` | 1, or 0 if stock behaviour applies because of an error |
+| `ukai_last_session_timestamp_seconds` | | When the last scheduling cycle began |
+| `ukai_panics_total` | | Should stay 0 |
+| `ukai_owner_budget_units` | | Budget of each owner |
+| `ukai_jobs`, `ukai_units` | `owner`, `tier`, `state` | `state` is `running` or `pending` |
+| `ukai_tier_changes_total` | `from`, `to` | Steady growth without new jobs means tiers flap |
+| `ukai_job_priority` | `namespace`, `podgroup`, `owner`, `tier` | With `jobMetrics` |
+
+Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Use of the budget is
+`ukai_units{tier="budget",state="running"}`.
+
+KAI's plugin server lists every job, with the reason if it is held. It listens on
+localhost only:
+
+    kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
+    curl 'localhost:8081/tiers?owner=alice'
 
 ## Limits
 

@@ -4,6 +4,7 @@ go 1.26.10
 
 require (
 	github.com/kai-scheduler/KAI-scheduler v0.18.9
+	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/mock v0.6.0
 	k8s.io/api v0.36.2
 )
@@ -73,6 +74,7 @@ require (
 	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.1.2 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/moby/spdystream v0.5.1 // indirect
@@ -89,7 +91,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.88.0 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect

@@ -22,8 +22,11 @@ func UnitsOf(v float64) Units {
 	return Units(math.Ceil(v*unitScale - 1e-6))
 }
 
+// Float returns the amount in whole units.
+func (u Units) Float() float64 { return float64(u) / unitScale }
+
 func (u Units) String() string {
-	return strconv.FormatFloat(float64(u)/unitScale, 'f', -1, 64)
+	return strconv.FormatFloat(u.Float(), 'f', -1, 64)
 }
 
 // Class is how a job's priority class is treated.

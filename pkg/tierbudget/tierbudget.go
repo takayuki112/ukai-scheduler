@@ -34,7 +34,8 @@ var (
 )
 
 type plugin struct {
-	config *Config
+	config *Config // nil if invalid
+	err    error   // why
 	ssn    *framework.Session
 	jobs   map[common_info.PodGroupID]*jobState
 	// results is set once they apply to the session.
@@ -62,6 +63,7 @@ func New(args framework.PluginArguments) framework.Plugin {
 		if errorLog.changed("config", err.Error()) {
 			log.InfraLogger.Errorf("Plugin %s is disabled, invalid configuration: %v", Name, err)
 		}
+		p.err = err
 		return p
 	}
 	if errorLog.changed("config", "") {
@@ -75,16 +77,22 @@ func (*plugin) Name() string { return Name }
 
 func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 	logLoaded.Do(func() { log.InfraLogger.Infof("Plugin %s loaded", Name) })
+	// Once, because KAI's server reads its handlers without a lock: adding one while
+	// another request is served may crash the process.
+	addEndpoint.Do(func() { ssn.AddHttpHandler(StatusPath, serveStatus) })
 	if p.config == nil {
+		p.publishError("invalid configuration: " + p.err.Error())
 		return
 	}
-	defer recoverTo("opening the session", nil)
+	defer recoverTo("opening the session", func() { p.publishError("panic while opening the session") })
 
 	p.ssn = ssn
 	p.collect()
 	results := tiers.Assign(p.config.Policy, p.tierJobs())
 	p.report(results)
+	status := p.buildStatus(results)
 	if p.config.Mode != Enforce {
+		publish(status)
 		return
 	}
 	warnStockConsolidation(ssn)
@@ -96,6 +104,7 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 	openSession.Store(p)
 	ssn.AddPrePredicateFn(p.prePredicate)
 	ssn.AddVictimInvariantPrePredicateFn(p.victimInvariantPrePredicate)
+	publish(status)
 }
 
 func (p *plugin) OnSessionClose(*framework.Session) {
@@ -269,6 +278,7 @@ func recoverTo(doing string, then func()) {
 	if r == nil {
 		return
 	}
+	panicCount.Inc()
 	if errorLog.changed("panic", fmt.Sprint(doing, r)) {
 		log.InfraLogger.Errorf("Plugin %s: panic while %s: %v\n%s", Name, doing, r, debug.Stack())
 	}

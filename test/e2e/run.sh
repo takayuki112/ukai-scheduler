@@ -37,7 +37,14 @@ Y
 done
 
 cleanup() { kubectl delete jobs -l ukai-test --wait=true --timeout=90s >/dev/null 2>&1 || true; }
-trap cleanup EXIT
+pids=()
+trap 'for p in ${pids[@]+"${pids[@]}"}; do kill "$p" 2>/dev/null || true; done; cleanup' EXIT
+
+# Poll both endpoints throughout, to check that readers do no harm.
+kubectl -n $NS port-forward deployment/kai-scheduler-default 18080:8080 18081:8081 >"$WORK/port-forward.log" 2>&1 & pids+=($!)
+for _ in $(seq 30); do curl -sf localhost:18081/tiers >/dev/null && break; sleep 1; done
+curl -sSf localhost:18081/tiers >/dev/null
+while :; do curl -s localhost:18081/tiers localhost:18080/metrics >/dev/null || true; sleep 0.1; done & pids+=($!)
 
 submit() { # name owner class gpus [pods, as a gang]
   kubectl create -f - >/dev/null <<Y
@@ -161,6 +168,24 @@ submit g alice high 1 2; expect g Running
 [ "$(count g Running)" = 2 ] || { echo "FAIL: the gang is not complete"; exit 1; }
 submit a1 alice high 1; expect a1 Pending
 echo "  ok: gangs of 3 held, of 2 complete"
+
+echo "12. Metrics and the status endpoint agree with that"
+metrics=$(curl -sSf localhost:18080/metrics)
+tiers=$(curl -sSf 'localhost:18081/tiers?owner=alice')
+has() { grep -qF -- "$2" <<<"$1" || { echo "FAIL: no $2"; grep '^ukai' <<<"$metrics"; echo "$tiers"; exit 1; }; }
+has "$metrics" 'ukai_active{mode="enforce"} 1'
+has "$metrics" 'ukai_owner_budget_units 2'
+has "$metrics" 'ukai_units{owner="alice",state="running",tier="budget"} 2'
+has "$metrics" 'ukai_units{owner="alice",state="pending",tier="held"} 4'
+has "$metrics" 'ukai_jobs{owner="alice",state="pending",tier="held"} 2'
+has "$metrics" 'ukai_panics_total 0'
+has "$metrics" 'ukai_tier_changes_total{from="promoted",to="'
+has "$tiers" '"reason": "needs 3 units, budget is 2"'
+[ "$(grep -c '"tier": "held"' <<<"$tiers")" = 2 ] || { echo "FAIL: $tiers"; exit 1; }
+if grep -q 'ukai_job_priority' <<<"$metrics"; then echo "FAIL: job metrics without jobMetrics"; exit 1; fi
+now=$(sed -n 's/^ukai_last_session_timestamp_seconds //p' <<<"$metrics")
+awk -v t="$now" -v n="$(date +%s)" 'BEGIN { exit !(n - t < 30 && t - n < 30) }' || { echo "FAIL: stale, $now"; exit 1; }
+echo "  ok"
 
 kubectl -n $NS logs deployment/kai-scheduler-default --tail=-1 >"$WORK/scheduler.log"
 if grep -E 'Plugin tierbudget.*(panic|is disabled)' "$WORK/scheduler.log"; then echo "FAIL: errors logged"; exit 1; fi
