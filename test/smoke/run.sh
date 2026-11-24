@@ -10,7 +10,7 @@ CLUSTER=${CLUSTER:-ukai-smoke}
 NODE_IMAGE=${NODE_IMAGE:-kindest/node:v1.35.0}
 NS=kai-scheduler
 IMAGE=ghcr.io/kai-scheduler/kai-scheduler/ukai-scheduler:smoke # local only, never pushed
-WORK=$PWD/bin/smoke
+WORK=${WORK:-$PWD/bin/smoke}
 export KUBECONFIG=$WORK/kubeconfig # never the user's own
 
 fail() { echo "FAIL: $*" >&2; exit 1; }

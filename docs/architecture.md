@@ -55,7 +55,9 @@ finds such pods on their nodes, and remembers the user, or after a restart reads
 
 ## Cost
 
-About 0.8 ms per cycle for 1,300 jobs, on a laptop. KAI's cycle is a second or more.
+About 10 ms per cycle, of a cycle of 1.5 to 2.5 s: measured with 200 simulated nodes, some 2,900
+pending pods, and KAI's default limit of 0.7 CPU, see [testing](testing.md). Stock KAI's cycles were as long, but
+runs vary too much to compare them closely.
 
 ## Limits
 

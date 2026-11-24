@@ -10,11 +10,30 @@
 | Upgrade | Stock to audit to enforce and back, a broken configuration, a wrong rollback; no running job changes | `test/upgrade/run.sh` |
 | Failure | Kills, lost nodes, API outage, failover, stuck pods, changed labels, with the budget sampled throughout | `test/failure/run.sh` |
 | Policies | The Kyverno examples, with impersonated Kubernetes usernames, and that the tricks work without them | `test/kyverno/run.sh` |
+| Scale | Simulated nodes (KWOK) and a burst of 3,000 jobs; the budget is checked at every pod event | `test/scale/run.sh setup`, then `test/scale/run.sh enforce -jobs 3000 -owners 60` |
+
+## Scale
+
+200 simulated nodes of 8 GPUs, 60 users with a budget of 8, 3,000 jobs at once and 30 more a
+minute, for 5 minutes, with a real API server. Two rounds each of stock, audit and enforce, on a
+busy laptop:
+
+| | Stock | Audit | Enforce |
+|---|---|---|---|
+| Pod events | 77,085 | 80,078 | 81,292 |
+| Budget violations | not enforced | not enforced | **0** |
+| Scheduler restarts | 0 | 0 | 0 |
+| Mean cycle | 1.8 to 2.5 s | 1.7 to 2.2 s | 1.5 to 1.7 s |
+| of which the plugin, opening the session | - | 9 to 16 ms | 9 to 12 ms |
+| Scheduler memory, most | 493 MiB | 492 MiB | 485 MiB |
+
+The differences in cycle time are not due to the plugin alone: other jobs run, and the machine was
+not idle. The scheduler was near its default limit of 512 MiB in all cases, and KAI's binder
+(200 MiB) was killed for lack of memory, under stock KAI too: raise these limits for clusters of this size.
 
 The cluster tests need go, docker, kind, kubectl, helm and jq. They use their own kubeconfig, and
 refuse any context but their kind cluster. Run the smoke test first; it makes the cluster.
 
 ## What is not tested
 
-Real GPUs, GPU sharing with real devices, clusters of more than a few nodes with a real API
-server, KAI versions other than v0.18.9, and long operation.
+Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, and long operation.
