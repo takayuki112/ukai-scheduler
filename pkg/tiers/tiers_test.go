@@ -42,7 +42,8 @@ func TestAssign(t *testing.T) {
 		{"within budget", policy(), []Job{p1("x", 2, true, 1), p1("y", 2, false, 2)}, map[string]Tier{"x": Budget, "y": Budget}},
 		{"over budget", policy(), []Job{p1("x", 4, true, 1), p1("y", 1, false, 2)}, map[string]Tier{"x": Budget, "y": Held}},
 		{"small overtakes big", policy(), []Job{p1("x", 2, true, 1), p1("big", 4, false, 2), p1("small", 2, false, 3)}, map[string]Tier{"x": Budget, "big": Held, "small": Budget}},
-		{"oldest pending wins", policy(), []Job{p1("new", 4, false, 2), p1("old", 4, false, 1)}, map[string]Tier{"old": Budget, "new": Held}},
+		{"waiting jobs do not hold each other", policy(), []Job{p1("new", 4, false, 2), p1("old", 4, false, 1)}, map[string]Tier{"old": Budget, "new": Budget}},
+		{"reserves oldest first, and only what fits", policy(), []Job{p1("new", 4, false, 2), p1("old", 1, false, 1), p2("a", 3, true, 3), p2("b", 1, true, 4)}, map[string]Tier{"old": Budget, "new": Budget, "a": Promoted, "b": Normal}},
 		{"running over budget stays", policy(), []Job{p1("x", 8, true, 1), p2("y", 1, true, 2)}, map[string]Tier{"x": Budget, "y": Normal}},
 		{"charged counts but is never held", policy(), []Job{job("w", Charged, 3, true, 1), job("w2", Charged, 9, false, 2), p1("x", 2, false, 3)}, map[string]Tier{"w": Budget, "w2": Budget, "x": Held}},
 		{"owners are separate", policy(), []Job{p1("x", 4, true, 1), p1("y", 4, false, 2), owned("b", p1("z", 4, false, 3))}, map[string]Tier{"x": Budget, "y": Held, "z": Budget}},
@@ -58,7 +59,7 @@ func TestAssign(t *testing.T) {
 		{"pending counts running normal", policy(), []Job{p1("x", 4, true, 1), p2("a", 2, true, 2), p2("b", 4, false, 3)}, map[string]Tier{"x": Budget, "a": Normal, "b": Excess}},
 		{"large is excess", policy(), []Job{p2("a", 8, true, 1), p2("b", 8, false, 2)}, map[string]Tier{"a": Excess, "b": Excess}},
 		{"large is normal if first", large, []Job{p2("a", 8, true, 1), p2("b", 8, false, 2), p2("c", 1, true, 3)}, map[string]Tier{"a": Normal, "b": Excess, "c": Promoted}},
-		{"fractions", policy(), []Job{p1("x", 3.5, true, 1), p1("y", 0.5, false, 2), p1("z", 0.1, false, 3)}, map[string]Tier{"x": Budget, "y": Budget, "z": Held}},
+		{"fractions", policy(), []Job{p1("x", 3.5, true, 1), p1("y", 0.5, false, 2), p1("z", 0.6, false, 3)}, map[string]Tier{"x": Budget, "y": Budget, "z": Held}},
 		{"no owner", policy(), []Job{owned("", p1("x", 1, false, 1)), owned("", p1("y", 1, true, 1)), owned("", p2("z", 1, true, 1))}, map[string]Tier{"x": Held, "y": Budget, "z": Excess}},
 		{"no GPUs or other class", policy(), []Job{p1("x", 0, false, 1), p2("y", 0, true, 1), owned("", p1("z", 0, false, 1)), job("o", Other, 9, true, 1)}, map[string]Tier{"x": Unmanaged, "y": Unmanaged, "z": Unmanaged, "o": Unmanaged}},
 	} {
@@ -93,7 +94,7 @@ func TestAssign(t *testing.T) {
 
 func TestReasons(t *testing.T) {
 	got := Assign(policy(), []Job{p1("x", 2.5, true, 1), p1("y", 2, false, 2), p1("z", 8, false, 3)})
-	for id, want := range map[string]string{"y": "using or reserving 2.5 of 4", "z": "needs 8 units, budget is 4"} {
+	for id, want := range map[string]string{"y": "using 2.5 of 4", "z": "needs 8 units, budget is 4"} {
 		if !strings.Contains(got[id].Reason, want) {
 			t.Errorf("%s: %q lacks %q", id, got[id].Reason, want)
 		}
@@ -172,16 +173,13 @@ func TestPropertyOrderIndependentAndPure(t *testing.T) {
 func TestPropertyLimits(t *testing.T) {
 	property(t, func(t *testing.T, _ *rand.Rand, p Policy, jobs []Job) {
 		res := Assign(p, jobs)
-		type sums struct{ used, granted, promoted, normal, biggest Units }
+		type sums struct{ used, promoted, normal, biggest Units }
 		by := map[string]*sums{}
 		for _, j := range jobs {
 			s := by[j.Owner]
 			if s == nil {
 				s = &sums{}
 				by[j.Owner] = s
-			}
-			if j.Class == Budgeted && !j.Running && j.Owner != "" && j.Units > 0 && res[j.ID].Tier == Budget {
-				s.granted += j.Units
 			}
 			if (j.Class == Budgeted || j.Class == Charged) && j.Running {
 				s.used += j.Units
@@ -201,11 +199,15 @@ func TestPropertyLimits(t *testing.T) {
 				}
 			}
 		}
-		for o, s := range by {
-			if s.granted > 0 && s.used+s.granted > p.Budget {
-				t.Errorf("%s: budget exceeded", o)
+		for _, j := range jobs {
+			if j.Class == Budgeted && !j.Running && j.Owner != "" && j.Units > 0 {
+				if held := by[j.Owner].used+j.Units > p.Budget; held != (res[j.ID].Tier == Held) {
+					t.Errorf("%s: held should be %v", j.ID, held)
+				}
 			}
-			if s.promoted > 0 && s.used+s.granted+s.promoted > p.Budget {
+		}
+		for o, s := range by {
+			if s.promoted > 0 && s.used+s.promoted > p.Budget {
 				t.Errorf("%s: promotion exceeds budget", o)
 			}
 			alone := p.LargeJobs == LargeNormalIfFirst && s.normal == s.biggest

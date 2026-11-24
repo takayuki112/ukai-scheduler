@@ -2,7 +2,11 @@ module github.com/takayuki112/ukai-scheduler
 
 go 1.26.10
 
-require github.com/kai-scheduler/KAI-scheduler v0.18.9
+require (
+	github.com/kai-scheduler/KAI-scheduler v0.18.9
+	go.uber.org/mock v0.6.0
+	k8s.io/api v0.36.2
+)
 
 require (
 	cel.dev/expr v0.25.3 // indirect
@@ -110,7 +114,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0 // indirect
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
-	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
@@ -132,8 +135,8 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.36.2 // indirect
 	k8s.io/apiextensions-apiserver v0.35.4 // indirect
 	k8s.io/apimachinery v0.36.2 // indirect
 	k8s.io/apiserver v0.35.4 // indirect

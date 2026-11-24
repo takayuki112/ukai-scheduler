@@ -7,3 +7,12 @@ scheduler:
   plugins:
     tierbudget:
       priority: 50
+      arguments:
+        mode: enforce
+        ownerLabel: example.com/owner
+        budgetedClasses: test-high
+        promotableClasses: test-mid
+        budget: "2"
+        allowance: "2"
+        promotedPriority: "75"
+        excessPriority: "45"

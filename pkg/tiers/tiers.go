@@ -156,20 +156,25 @@ func (p Policy) assignOwner(jobs []*Job, results map[string]Result) {
 	slices.SortFunc(running, byStarted)
 	slices.SortFunc(pending, byCreated)
 
-	// Reserve for waiting budgeted jobs, oldest first. One that does not fit does
-	// not block those behind it, nor promotion.
+	// Only what is running holds a waiting job: one that fits may start even if an
+	// older one is waiting for GPUs. For promotion, also reserve for those that fit,
+	// oldest first. One that does not fit blocks neither those behind it nor
+	// promotion.
+	var reserved Units
 	for _, j := range waiting {
-		if used+j.Units > p.Budget {
-			results[j.ID] = Result{Tier: Held, Priority: j.Priority, Reason: p.holdReason(j, used)}
+		if reason := p.OverBudget(j.Units, used); reason != "" {
+			results[j.ID] = Result{Tier: Held, Priority: j.Priority, Reason: reason}
 			continue
 		}
-		used += j.Units
 		results[j.ID] = Result{Tier: Budget, Priority: j.Priority}
+		if used+reserved+j.Units <= p.Budget {
+			reserved += j.Units
+		}
 	}
 
 	// Promote running jobs into what is left, longest running first. A job that has
 	// just started then cannot displace a promoted one.
-	spare := p.Budget - used
+	spare := p.Budget - used - reserved
 	var rest []*Job
 	for _, j := range running {
 		if j.Units <= spare {
@@ -212,11 +217,16 @@ func (p Policy) excess(j *Job) Result {
 	return Result{Tier: Excess, Priority: min(j.Priority, p.ExcessPriority)}
 }
 
-func (p Policy) holdReason(j *Job, used Units) string {
-	if j.Units > p.Budget {
-		return fmt.Sprintf("needs %s units, budget is %s", j.Units, p.Budget)
+// OverBudget says why units more do not fit on top of used, or "" if they do.
+func (p Policy) OverBudget(units, used Units) string {
+	switch {
+	case used+units <= p.Budget:
+		return ""
+	case units > p.Budget:
+		return fmt.Sprintf("needs %s units, budget is %s", units, p.Budget)
+	default:
+		return fmt.Sprintf("needs %s units, using %s of %s", units, used, p.Budget)
 	}
-	return fmt.Sprintf("needs %s units, using or reserving %s of %s", j.Units, used, p.Budget)
 }
 
 func byCreated(a, b *Job) int {
