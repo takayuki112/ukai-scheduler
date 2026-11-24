@@ -1,4 +1,4 @@
-# The scheduler reads a job's owner and class from its PodGroup, which KAI creates. Only
+# The scheduler reads a job's user and class from its PodGroup, which KAI creates. Only
 # KAI and the garbage collector may write them. Prefer RBAC without write access to
 # podgroups; this is for roles such as "edit" that cannot be changed.
 apiVersion: kyverno.io/v1

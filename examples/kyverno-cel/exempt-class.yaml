@@ -1,4 +1,4 @@
-# As in ../kyverno/exempt-class.yaml, for Kyverno 1.20 or later. Adapt the class and the owners.
+# As in ../kyverno/exempt-class.yaml, for Kyverno 1.20 or later. Adapt the class and the users.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:

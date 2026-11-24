@@ -19,7 +19,7 @@ sequenceDiagram
     participant T as tiers.Assign
     K->>K: snapshot of the cluster
     K->>P: OnSessionOpen
-    P->>T: jobs: owner, class, units, running, times
+    P->>T: jobs: user, class, units, running, times
     T-->>P: tier and priority of each
     P->>P: publish metrics and status
     P->>K: in enforce mode: set in-memory priorities, add hooks
@@ -41,9 +41,9 @@ updates for simulated placements and restores when it rolls them back. So severa
 one cycle cannot exceed it together.
 
 **Held jobs also leave the search for victims early.** Otherwise KAI would look for jobs to evict
-on their behalf, and conclude that similar jobs of other owners cannot be placed either.
+on their behalf, and conclude that similar jobs of other users cannot be placed either.
 
-**Owners are independent.** No decision about one depends on another's jobs, except through GPUs.
+**Users are independent.** No decision about one depends on another's jobs, except through GPUs.
 
 **Failures leave stock KAI.** Nothing is applied until all is computed, and panics are caught.
 
@@ -51,7 +51,7 @@ on their behalf, and conclude that similar jobs of other owners cannot be placed
 adding one while serving could crash the process.
 
 **Pods without a PodGroup still count.** Deleting a Job deletes its PodGroup at once. The plugin
-finds such pods on their nodes, and remembers the owner, or after a restart reads the pod's label.
+finds such pods on their nodes, and remembers the user, or after a restart reads the pod's label.
 
 ## Cost
 
@@ -61,5 +61,5 @@ About 0.8 ms per cycle for 1,300 jobs, on a laptop. KAI's cycle is a second or m
 
 - Same budget for everyone.
 - One KAI version at a time: it compiles against KAI's internals.
-- A stream of small budgeted jobs can delay a large one of the same owner.
+- A stream of small budgeted jobs can delay a large one of the same user.
 - `go install` by version does not work, because KAI needs `replace` directives.

@@ -6,7 +6,7 @@ import (
 	"github.com/takayuki112/ukai-scheduler/pkg/tiers"
 )
 
-// The example in the README and in docs/images/story.gif: 8 GPUs, a budget of 4 and an
+// The example in the README and in docs/images/story.py: 8 GPUs, a budget of 4 and an
 // allowance of 2. Keep them in step.
 func TestDocumentedStory(t *testing.T) {
 	args := testArgs("4")

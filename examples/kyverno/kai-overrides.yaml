@@ -1,7 +1,7 @@
 # KAI lets labels and annotations override a job's priority class, and whether and when
 # it may be evicted, or name its PodGroup. Policies on priorityClassName in the pod spec
 # do not see them. Add every custom workload type that users may submit: KAI reads them
-# from all of a pod's owners.
+# from all of a pod's parent objects.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:

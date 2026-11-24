@@ -28,15 +28,15 @@ scheduler restarts. An error in any of them disables the plugin, and the log say
 | Argument | Default | Meaning |
 |---|---|---|
 | `mode` | `audit` | `audit` only logs decisions; `enforce` applies them |
-| `ownerLabel` | required | Label that names the owner |
-| `budgetedClasses` | required | Comma-separated priority classes |
-| `chargedClasses` | none | |
-| `promotableClasses` | none | |
-| `budget` | required | Units per owner |
-| `allowance` | required with `promotableClasses` | Units per owner that keep their priority |
+| `ownerLabel` | required | Label whose value is the job's user |
+| `budgetedClasses` | required | Comma-separated classes that run up to the budget, then wait (P1) |
+| `chargedClasses` | none | Classes that use the budget, but never wait for it |
+| `promotableClasses` | none | Classes that may be promoted, or become excess (P2) |
+| `budget` | required | Units per user |
+| `allowance` | required with `promotableClasses` | Units per user that keep their priority |
 | `promotedPriority` | required with `promotableClasses` | Usually that of the budgeted class |
 | `excessPriority` | required with `promotableClasses` | Below the promotable class, above those it may evict |
-| `largeJobs` | `excess` | For a job larger than the allowance: `excess`, or `normal-if-first` to keep its priority if nothing of its owner's is ahead of it |
+| `largeJobs` | `excess` | For a job larger than the allowance: `excess`, or `normal-if-first` to keep its priority if nothing of its user's is ahead of it |
 | `gpuTypeLabel` | none | nodeSelector key with the GPU type |
 | `gpuWeights` | none | `type=weight`, comma-separated |
 | `defaultGPUWeight` | `1` | Weight of other types, and of pods that do not select one |

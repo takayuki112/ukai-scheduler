@@ -15,9 +15,9 @@ flowchart LR
 | Check | Why |
 |---|---|
 | KAI is v0.18.9 | It replaces that version's scheduler |
-| Jobs have a label with their owner, on the Job **and** its pods | Budgets are by owner |
+| Jobs have a label that names their user, on the Job **and** its pods | Budgets are by user |
 | Priority classes, and which are budgeted and promotable | |
-| Nobody but KAI can write PodGroups | Owner and class are read there, see [security](security.md) |
+| Nobody but KAI can write PodGroups | The user and class are read there, see [security](security.md) |
 | You can edit KAI's Helm values, and restart the scheduler | |
 
 ## 1. Replay a snapshot
@@ -42,7 +42,7 @@ promotedPriority: "75"
 excessPriority: "45"
 ```
 
-Look for jobs that are unexpectedly held, owners that are `-` (no label), and evictions. `-all`
+Look for jobs that are unexpectedly held, jobs whose `OWNER` is `-` (no label for the user), and evictions. `-all`
 lists every managed job. It does not show preemption that takes several cycles.
 
 ## 2. Build the image
@@ -66,21 +66,21 @@ Then restart the scheduler, as it reads its configuration at the start:
 Expect `Plugin tierbudget loaded` and one line for each job that changes tier. Scheduling is as
 before, and running jobs are not touched.
 
-Leave it for a week or two, and compare with what people expect. Watch the
+Leave it for a week or two, and compare with what users expect. Watch the
 [metrics](observability.md): `ukai_active` is 1, `ukai_panics_total` is 0, and
 `ukai_tier_changes_total` grows only as jobs come and go.
 
 ## 4. Policies
 
 Apply those in [security](security.md) before enforcing, in audit mode first. Otherwise the
-rules hold only for those who keep to them. Tell people about the [user guide](user-guide.md).
+rules hold only for those who keep to them. Tell users about the [user guide](user-guide.md).
 
 ## 5. Enforce
 
-Set `mode: enforce` and restart the scheduler. To go step by step, first leave out
-`promotableClasses`, which needs `protectedPriority`, so that only budgets apply.
+Set `mode: enforce` and restart the scheduler. To go step by step, first apply
+only budgets: leave out `promotableClasses`, and set `protectedPriority`, which is then required.
 
-Jobs above a budget keep running; their owners just cannot start more.
+Jobs above a budget keep running; their users just cannot start more.
 
 ## Rolling back
 

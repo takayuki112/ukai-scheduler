@@ -11,15 +11,15 @@ On KAI's `/metrics`:
 | `ukai_active` | `mode` | 1, or 0 if stock behaviour applies because of an error |
 | `ukai_last_session_timestamp_seconds` | | When the last scheduling cycle began |
 | `ukai_panics_total` | | Should stay 0 |
-| `ukai_owner_budget_units` | | Budget of each owner |
+| `ukai_owner_budget_units` | | Budget of each user |
 | `ukai_jobs`, `ukai_units` | `owner`, `tier`, `state` | `state` is `running` or `pending` |
 | `ukai_tier_changes_total` | `from`, `to` | Steady growth without new jobs means tiers flap |
 | `ukai_job_priority` | `namespace`, `podgroup`, `owner`, `tier` | With `jobMetrics` |
 
-Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Useful queries:
+The label `owner` is the job's user. Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Useful queries:
 
 ```promql
-# Use of the budget by owner
+# Use of the budget by user
 ukai_units{tier="budget",state="running"}
 # Waiting for budget
 sum by (owner) (ukai_units{tier="held"})

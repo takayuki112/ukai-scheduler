@@ -1,4 +1,4 @@
-# Sets the owner label to the user who submits, on the workload and on its pods, so that
+# Sets the label that names the user to the Kubernetes username of who submits, on the workload and on its pods, so that
 # nobody can use another's budget. Adapt:
 # - example.com/owner, here and in the plugin's ownerLabel
 # - the kinds: add every custom workload type that users may submit, with the path to its

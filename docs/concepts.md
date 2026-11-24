@@ -5,9 +5,9 @@
 | Word | Meaning |
 |---|---|
 | **Job** | Whatever KAI schedules as one: a PodGroup, usually one Kubernetes Job |
-| **Owner** | The value of a label on the job, normally a person |
+| **User** | Whose job it is: the value of the label that `ownerLabel` names, for example `example.com/owner: alice`. Normally a person |
 | **Unit** | One GPU, times a weight that you may set by GPU type |
-| **Budget** | Units that each owner may run at high priority |
+| **Budget** | Units that each user may run at high priority |
 | **Allowance** | Units of medium-priority work that keep their priority |
 | **Tier** | What the scheduler makes of a job in this cycle |
 
@@ -32,7 +32,7 @@ flowchart TD
     kind -- charged --> b1[budget]
     kind -- budgeted --> run1{Running?}
     run1 -- yes --> b2[budget]
-    run1 -- no --> fit{Fits the budget, after<br/>what the owner runs?}
+    run1 -- no --> fit{Fits the budget, after<br/>what the user runs?}
     fit -- yes --> b3[budget<br/>may start]
     fit -- no --> held[<b>held</b><br/>waits, says why]
     kind -- promotable --> run2{Running?}
@@ -46,12 +46,12 @@ flowchart TD
 
 ## The rules
 
-**Budget.** A P1 starts if it fits next to the P1 and charged jobs that its owner is
+**Budget.** A P1 starts if it fits next to the P1 and charged jobs that its user is
 *running*. One that does not fit does not block smaller ones behind it. The budget holds even
-when GPUs are idle, so that people use P2 for the rest. An owner already above the budget,
+when GPUs are idle, so that users use P2 for the rest. A user already above the budget,
 for example on the day you switch it on, keeps running jobs and just cannot start more.
 
-**Promotion.** What P1 leaves of the budget goes to the owner's running P2, *longest running
+**Promotion.** What P1 leaves of the budget goes to the user's running P2, *longest running
 first*. A waiting P1 that fits the budget takes it back. One that does not fit, for example
 because it is larger than the budget, leaves promotions alone. Pending jobs are never promoted.
 
@@ -59,7 +59,7 @@ because it is larger than the budget, leaves promotions alone. Pending jobs are 
 allowance stay normal and the rest are excess. Running jobs come before pending ones.
 
 **Excess still runs.** It uses idle GPUs and can evict lower classes, but any P2 within its
-owner's allowance may evict it.
+user's allowance may evict it.
 
 **All of a job or nothing.** A job is charged in full from when it starts, until its last pod
 is gone. Deleting a job does not free budget while its pods still terminate.
@@ -119,9 +119,9 @@ share applies as before.
 that has just started must not displace one that is promoted. For the allowance, start order
 would let a job evict another, drop to excess, and be evicted in turn, endlessly.
 
-**Does a promoted job stay promoted?** Until its owner uses the budget for P1. Then as few are
+**Does a promoted job stay promoted?** Until its user uses the budget for P1. Then as few are
 demoted as needed.
 
 **Is an unused budget kept free?** No. Idle GPUs are for anyone.
 
-**Can one person block others with many P1?** Only up to the budget at a time.
+**Can one user block others with many P1?** Only up to the budget at a time.

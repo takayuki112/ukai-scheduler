@@ -1,6 +1,6 @@
 # ukai-scheduler
 
-**Per-person GPU budgets and fair priority tiers for a shared Kubernetes cluster, built on
+**Per-user GPU budgets and fair priority tiers for a shared Kubernetes cluster, built on
 [KAI Scheduler](https://github.com/kai-scheduler/KAI-Scheduler).**
 
 [![ci](https://github.com/takayuki112/ukai-scheduler/actions/workflows/ci.yaml/badge.svg)](https://github.com/takayuki112/ukai-scheduler/actions/workflows/ci.yaml)
@@ -13,20 +13,40 @@ submits everything at high priority, and priority means nothing.
 
 ## What this does
 
-Each person gets a **budget** of GPUs at high priority.
+Each user gets a **budget** of GPUs at high priority.
 
 - **Above the budget, high-priority jobs wait**, even if GPUs are free, and say why.
-- **Unused budget is not wasted.** A person's running medium-priority jobs are *promoted*
+- **Unused budget is not wasted.** A user's running medium-priority jobs are *promoted*
   into it, and are then as safe from eviction as high-priority jobs.
 - **Nobody hogs the middle either.** Beyond an *allowance*, medium-priority jobs become
   *excess*: they still run on idle GPUs, but give way first.
-- **Promotion lends, it does not give.** When the person submits a high-priority job, their
+- **Promotion lends, it does not give.** When the user submits a high-priority job, their
   own promoted jobs make room.
 
-![Six steps: a job is promoted, another is held, and a promoted job gives way to its owner's own](docs/images/story.gif)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/story-dark.svg">
+  <img src="docs/images/story-light.svg" width="100%" alt="Animation in six steps, which the table below describes: a job is promoted, another is held, a promoted job gives way to its user's own, and takes idle GPUs again">
+</picture>
 
-*8 GPUs, a budget of 4 and an allowance of 2 per person. A
+*8 GPUs, a budget of 4 and an allowance of 2 per user. A
 [test](pkg/tierbudget/story_test.go) runs these steps through the scheduler.*
+
+<details>
+<summary>The same in words</summary>
+
+| | What happens | Running | Waiting |
+|---|---|---|---|
+| 1 | Alice starts a P2, `train`, on 4 GPUs. Alice's budget is unused, so it is promoted to P1 priority. | train (promoted) | |
+| 2 | Bob starts a P1, `eval`, on 4 GPUs. It fits Bob's budget. | train (promoted), eval | |
+| 3 | Bob submits another P1, `eval2`, on 2 GPUs. Bob's budget is used up, so it is held, and evicts nobody. | train (promoted), eval | eval2 (held) |
+| 4 | Alice submits a P1, `debug`, on 4 GPUs. It takes Alice's budget back: train is demoted, as excess because it is larger than the allowance, and makes room. | debug, eval | eval2 (held), train (excess) |
+| 5 | eval ends. eval2 fits Bob's budget, and starts. The 2 free GPUs are too few for train. | debug, eval2 | train (excess) |
+| 6 | eval2 ends. Idle GPUs go to anyone, so train runs again. | debug, train (excess) | |
+
+</details>
+
+P1, P2 and P3 stand for your high, medium and low priority classes. See
+[concepts](docs/concepts.md) for the exact rules.
 
 ## How it works
 
@@ -69,10 +89,10 @@ team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
 | For | Page |
 |---|---|
 | Everyone | [Concepts](docs/concepts.md): the rules, with examples |
-| People who submit jobs | [User guide](docs/user-guide.md): why is my job waiting? |
+| Users, who submit jobs | [User guide](docs/user-guide.md): why is my job waiting? |
 | Cluster admins | [Install](docs/install.md): replay, audit, enforce, roll back |
 | | [Configuration](docs/configuration.md): every setting |
-| | [Security](docs/security.md): keep people from evading the rules |
+| | [Security](docs/security.md): keep users from evading the rules |
 | | [Observability](docs/observability.md): metrics and the status endpoint |
 | | [Troubleshooting](docs/troubleshooting.md) |
 | Developers | [Architecture](docs/architecture.md), [Testing](docs/testing.md) |

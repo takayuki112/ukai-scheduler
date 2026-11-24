@@ -1,6 +1,6 @@
 # User guide
 
-For people who submit jobs. Your cluster's class names and numbers may differ: ask your admins.
+For users: those who submit jobs. Your cluster's class names and numbers may differ: ask your admins.
 
 ## Which class?
 
@@ -23,7 +23,7 @@ would run.
 |---|---|---|
 | `owner budget: needs 2 units, using 4 of 4` | Your budget is in use | Wait, stop a P1, or resubmit as P2 |
 | `owner budget: needs 8 units, budget is 4` | It can never fit | Resubmit as P2, or smaller |
-| `owner budget: no owner: label ... is not set` | The owner label is missing | Set it, or ask your admins |
+| `owner budget: no owner: label ... is not set` | The label that says whose job it is, is missing | Set it, or ask your admins |
 | anything else | KAI's own reason, such as no free GPUs | |
 
 ## Your job was evicted

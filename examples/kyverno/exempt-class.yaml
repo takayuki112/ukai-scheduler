@@ -1,5 +1,5 @@
-# Only the owners listed may use the class that is exempt from budgets. This trusts the
-# owner label, so it needs owner.yaml. Adapt the class and the owners.
+# Only the users listed may use the class that is exempt from budgets. This trusts the
+# label that names the user, so it needs owner.yaml. Adapt the class and the users.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
