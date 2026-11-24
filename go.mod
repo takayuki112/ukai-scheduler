@@ -1,4 +1,4 @@
-module ukai-scheduler
+module github.com/takayuki112/ukai-scheduler
 
 go 1.26.10
 

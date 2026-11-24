@@ -8,7 +8,7 @@ import (
 	"github.com/kai-scheduler/KAI-scheduler/cmd/scheduler/app"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/framework"
 
-	"ukai-scheduler/pkg/tierbudget"
+	"github.com/takayuki112/ukai-scheduler/pkg/tierbudget"
 )
 
 func main() {
