@@ -41,7 +41,7 @@ pids=()
 trap 'for p in ${pids[@]+"${pids[@]}"}; do kill "$p" 2>/dev/null || true; done; cleanup' EXIT
 
 # Poll both endpoints throughout, to check that readers do no harm.
-kubectl -n $NS port-forward deployment/kai-scheduler-default 18080:8080 18081:8081 >"$WORK/port-forward.log" 2>&1 & pids+=($!)
+(while :; do kubectl -n $NS port-forward deployment/kai-scheduler-default 18080:8080 18081:8081 & pf=$!; trap "kill $pf; exit" TERM; wait $pf || true; sleep 1; done) >"$WORK/port-forward.log" 2>&1 & pids+=($!)
 for _ in $(seq 30); do curl -sf localhost:18081/tiers >/dev/null && break; sleep 1; done
 curl -sSf localhost:18081/tiers >/dev/null
 while :; do curl -s localhost:18081/tiers localhost:18080/metrics >/dev/null || true; sleep 0.1; done & pids+=($!)

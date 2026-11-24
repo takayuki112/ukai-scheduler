@@ -98,6 +98,10 @@ func session(t *testing.T, nodes map[string]int, jobs []testJob) *framework.Sess
 	for _, tj := range jobs {
 		info := find(t, ssn, tj.name)
 		info.PodGroup.Spec.PriorityClassName = tj.class
+		for _, task := range info.GetAllPodsMap() {
+			task.Job = info.UID
+			task.Pod.Spec.PriorityClassName = tj.class
+		}
 		if tj.owner != "" {
 			info.PodGroup.Labels = map[string]string{ownerLabel: tj.owner}
 		}

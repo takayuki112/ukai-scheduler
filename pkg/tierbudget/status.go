@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,13 +33,15 @@ type Status struct {
 
 // JobStatus is a managed job. Jobs without GPUs are left out.
 type JobStatus struct {
-	Namespace string     `json:"namespace"`
-	Name      string     `json:"name"`
-	Owner     string     `json:"owner"`
-	Class     string     `json:"class"`
-	Running   bool       `json:"running"`
-	Units     float64    `json:"units"`
-	Tier      tiers.Tier `json:"tier"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Owner     string `json:"owner"`
+	Class     string `json:"class"`
+	Running   bool   `json:"running"`
+	// Orphan is set if pods are left but the PodGroup is gone.
+	Orphan bool       `json:"orphan,omitempty"`
+	Units  float64    `json:"units"`
+	Tier   tiers.Tier `json:"tier"`
 	// Priority is the effective one: in audit mode, what it would be.
 	Priority      int32  `json:"priority"`
 	ClassPriority int32  `json:"classPriority"`
@@ -79,6 +82,17 @@ func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 			Namespace: job.info.Namespace, Name: job.info.Name, Owner: job.owner,
 			Class: job.info.PodGroup.Spec.PriorityClassName, Running: job.running, Units: job.units.Float(),
 			Tier: r.Tier, Priority: r.Priority, ClassPriority: job.info.Priority, Reason: r.Reason,
+		})
+	}
+	for id, o := range p.orphans {
+		r := results[string(id)]
+		if r.Tier == tiers.Unmanaged {
+			continue
+		}
+		namespace, name, _ := strings.Cut(string(id), "/")
+		s.Jobs = append(s.Jobs, JobStatus{
+			Namespace: namespace, Name: name, Owner: o.owner, Class: o.className, Running: true, Orphan: true,
+			Units: o.units.Float(), Tier: r.Tier, Priority: r.Priority, ClassPriority: o.priority,
 		})
 	}
 	slices.SortFunc(s.Jobs, func(a, b JobStatus) int {

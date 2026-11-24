@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api"
@@ -33,6 +34,12 @@ var (
 	errorLog  = &changeLog{}
 )
 
+// lastGroups remembers PodGroups for their orphans. After a restart, the pods' own label
+// and class have to do.
+var lastGroups atomic.Pointer[map[common_info.PodGroupID]group]
+
+type group struct{ owner, className string }
+
 type plugin struct {
 	config *Config // nil if invalid
 	err    error   // why
@@ -42,6 +49,8 @@ type plugin struct {
 	results map[string]tiers.Result
 	// charged lists each owner's jobs that count against the budget.
 	charged map[string][]*jobState
+	// orphans are pods without a PodGroup, by its former ID.
+	orphans map[common_info.PodGroupID]*orphan
 }
 
 type jobState struct {
@@ -52,6 +61,18 @@ type jobState struct {
 	units tiers.Units
 	// running is whether it held resources when the session opened.
 	running bool
+}
+
+// orphan is what is left of a job whose PodGroup is gone. Deleting a Job deletes its
+// PodGroup at once, but the pods keep their GPUs for as long as they terminate. KAI
+// still has them on their nodes, where nothing can change them.
+type orphan struct {
+	class     tiers.Class
+	className string
+	owner     string
+	priority  int32
+	units     tiers.Units
+	created   time.Time
 }
 
 // New builds the plugin. It is a framework.PluginBuilder. With invalid arguments the
@@ -109,7 +130,7 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 
 func (p *plugin) OnSessionClose(*framework.Session) {
 	openSession.CompareAndSwap(p, nil)
-	p.ssn, p.jobs, p.charged, p.results = nil, nil, nil, nil
+	p.ssn, p.jobs, p.charged, p.orphans, p.results = nil, nil, nil, nil, nil
 }
 
 // collect reads the jobs that the configuration covers.
@@ -137,6 +158,48 @@ func (p *plugin) collect() {
 			p.charged[state.owner] = append(p.charged[state.owner], state)
 		}
 	}
+	p.collectOrphans()
+}
+
+func (p *plugin) collectOrphans() {
+	known := map[common_info.PodGroupID]group{}
+	for id, info := range p.ssn.ClusterInfo.PodGroupInfos {
+		if info != nil && info.PodGroup != nil {
+			known[id] = group{info.PodGroup.Labels[p.config.OwnerLabel], info.PodGroup.Spec.PriorityClassName}
+		}
+	}
+	var before map[common_info.PodGroupID]group
+	if last := lastGroups.Load(); last != nil {
+		before = *last
+	}
+	p.orphans = map[common_info.PodGroupID]*orphan{}
+	for _, node := range p.ssn.ClusterInfo.Nodes {
+		for _, task := range node.PodInfos {
+			if task.Job == "" || task.Pod == nil || !pod_status.IsActiveUsedStatus(task.Status) ||
+				p.ssn.ClusterInfo.PodGroupInfos[task.Job] != nil {
+				continue
+			}
+			g, ok := before[task.Job]
+			if !ok {
+				g = group{task.Pod.Labels[p.config.OwnerLabel], task.Pod.Spec.PriorityClassName}
+			}
+			known[task.Job] = g
+			class := p.config.Classes[g.className]
+			if class == tiers.Other {
+				continue
+			}
+			o := p.orphans[task.Job]
+			if o == nil {
+				o = &orphan{class: class, className: g.className, owner: g.owner, created: task.Pod.CreationTimestamp.Time}
+				if task.Pod.Spec.Priority != nil {
+					o.priority = *task.Pod.Spec.Priority
+				}
+				p.orphans[task.Job] = o
+			}
+			o.units += p.taskUnits(task)
+		}
+	}
+	lastGroups.Store(&known)
 }
 
 func (p *plugin) tierJobs() []tiers.Job {
@@ -152,6 +215,12 @@ func (p *plugin) tierJobs() []tiers.Job {
 			j.Started = s.info.LastStartTimestamp.Truncate(time.Second)
 		}
 		jobs = append(jobs, j)
+	}
+	for id, o := range p.orphans {
+		jobs = append(jobs, tiers.Job{
+			ID: string(id), Owner: o.owner, Class: o.class, Units: o.units,
+			Priority: o.priority, Running: true, Created: o.created, Started: o.created,
+		})
 	}
 	return jobs
 }
@@ -234,6 +303,11 @@ func (p *plugin) hold(task *pod_info.PodInfo) string {
 			}
 		}
 	}
+	for _, o := range p.orphans {
+		if o.owner == job.owner && o.class != tiers.Promotable {
+			used += o.units
+		}
+	}
 	return p.config.Policy.OverBudget(need, used)
 }
 
@@ -266,8 +340,13 @@ func (p *plugin) report(results map[string]tiers.Result) {
 		current[id] = fmt.Sprintf("%s (priority %d) %s", r.Tier, r.Priority, r.Reason)
 	}
 	for id, text := range tierLog.replace(current) {
-		log.InfraLogger.Infof("Plugin %s (%s): job %s of owner %q is %s",
-			Name, p.config.Mode, id, p.jobs[common_info.PodGroupID(id)].owner, text)
+		var owner string
+		if job := p.jobs[common_info.PodGroupID(id)]; job != nil {
+			owner = job.owner
+		} else if o := p.orphans[common_info.PodGroupID(id)]; o != nil {
+			owner, text = o.owner, text+" (its PodGroup is gone)"
+		}
+		log.InfraLogger.Infof("Plugin %s (%s): job %s of owner %q is %s", Name, p.config.Mode, id, owner, text)
 	}
 }
 
