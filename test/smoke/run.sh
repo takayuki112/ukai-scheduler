@@ -30,7 +30,11 @@ kai_dir=$(go list -m -f '{{.Dir}}' $KAI_MODULE)
 install -m 644 "$kai_dir/LICENSE" "$kai_dir/NOTICE" "$WORK/image/"
 docker build -t "$IMAGE" -f Dockerfile "$WORK/image"
 
-kind create cluster --name "$CLUSTER" --image "$NODE_IMAGE" --wait 180s
+kind create cluster --name "$CLUSTER" --image "$NODE_IMAGE" --wait 180s --config - <<Y
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes: [{role: control-plane}, {role: worker}, {role: worker}]
+Y
 trap '[ -n "${KEEP:-}" ] || kind delete cluster --name "$CLUSTER"' EXIT
 kind load docker-image "$IMAGE" --name "$CLUSTER"
 

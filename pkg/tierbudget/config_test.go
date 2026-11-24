@@ -17,6 +17,7 @@ func validArgs() framework.PluginArguments {
 		"budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid, mid-alt",
 		"budget": "4", "allowance": "4.5", "promotedPriority": "75", "excessPriority": "45", "largeJobs": "normal-if-first",
 		"gpuTypeLabel": "gpu-type", "gpuWeights": "small=1, big = 2.5", "defaultGPUWeight": "4",
+		"consolidation": "high>high, low; mid,low > mid,@promoted",
 	}
 }
 
@@ -30,6 +31,7 @@ func TestParseConfig(t *testing.T) {
 		Classes:      map[string]tiers.Class{"high": tiers.Budgeted, "workspace": tiers.Charged, "mid": tiers.Promotable, "mid-alt": tiers.Promotable},
 		Policy:       tiers.Policy{Budget: 4000, Allowance: 4500, PromotedPriority: 75, ExcessPriority: 45, LargeJobs: tiers.LargeNormalIfFirst},
 		GPUTypeLabel: "gpu-type", GPUWeights: map[string]float64{"small": 1, "big": 2.5}, DefaultWeight: 4,
+		Passes: []Pass{{Place: []string{"high"}, Move: []string{"high", "low"}}, {Place: []string{"mid", "low"}, Move: []string{"mid", "@promoted"}}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
@@ -68,6 +70,12 @@ func TestParseConfigErrors(t *testing.T) {
 		{"gpuWeights", "small=x", "gpuWeights: "},
 		{"gpuWeights", "small=1,small=2", "more than once"},
 		{"defaultGPUWeight", "-4", "defaultGPUWeight: "},
+		{"consolidation", "high", "not place>move"},
+		{"consolidation", "high>", "empty item"},
+		{"consolidation", ">low", "empty item"},
+		{"consolidation", "high>low;", "not place>move"},
+		{"consolidation", "high>low,low", "more than once"},
+		{"consolidation", "high>@normal", "unknown group"},
 		{"budgett", "4", "budgett: unknown"},
 	} {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {

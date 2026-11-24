@@ -21,9 +21,12 @@ sleep 5 # the operator updates the scheduler's configuration
 kubectl -n $NS rollout restart deployment/kai-scheduler-default
 kubectl -n $NS rollout status deployment/kai-scheduler-default --timeout=180s
 
-node=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-kubectl patch node "$node" --subresource=status --type=merge \
-  -p '{"status":{"capacity":{"nvidia.com/gpu":"4"},"allocatable":{"nvidia.com/gpu":"4"}}}' >/dev/null
+gpus() { # node count
+  kubectl patch node "$1" --subresource=status --type=merge \
+    -p "{\"status\":{\"capacity\":{\"nvidia.com/gpu\":\"$2\"},\"allocatable\":{\"nvidia.com/gpu\":\"$2\"}}}" >/dev/null
+}
+gpus "$CLUSTER-worker" 4
+gpus "$CLUSTER-worker2" 0
 for c in test-top:90 test-high:75 test-mid:50 test-low:25; do
   kubectl apply -f - >/dev/null <<Y
 apiVersion: scheduling.k8s.io/v1
@@ -107,6 +110,29 @@ cleanup
 echo "7. P0 evicts P1 and ignores budgets"
 submit a1 alice high 2; expect a1 Running
 submit t alice top 4; expect t Running; expect a1 Pending
+
+node() { kubectl get pods -l "job-name=$1" --field-selector=status.phase=Running -o jsonpath='{.items[0].spec.nodeName}'; }
+# 2 of 4 GPUs are free on each node, so a job of 4 fits only if one of two moves.
+fragment() { # class
+  cleanup
+  gpus "$CLUSTER-worker" 2; gpus "$CLUSTER-worker2" 0
+  submit m1 alice "$1" 2; expect m1 Running
+  gpus "$CLUSTER-worker2" 2; gpus "$CLUSTER-worker" 2
+  submit m2 bob "$1" 2; expect m2 Running
+  gpus "$CLUSTER-worker" 4; gpus "$CLUSTER-worker2" 4
+  [ "$(node m1)" != "$(node m2)" ] || { echo "FAIL: not fragmented"; exit 1; }
+  u=$(uid m1)$(uid m2)
+}
+echo "8. Consolidation for a P3 does not move P1"
+fragment high
+submit w carol low 4; expect w Pending; sleep 10
+[ "$(uid m1)$(uid m2)" = "$u" ] || { echo "FAIL: a P1 was moved"; exit 1; }
+echo "  ok: both P1 untouched"
+echo "9. Consolidation for a P3 moves a P3"
+fragment low
+submit w carol low 4; expect w Running; expect m1 Running; expect m2 Running
+[ "$(uid m1)$(uid m2)" != "$u" ] || { echo "FAIL: nothing was moved"; exit 1; }
+echo "  ok: one was moved"
 
 kubectl -n $NS logs deployment/kai-scheduler-default --tail=-1 >"$WORK/scheduler.log"
 if grep -E 'Plugin tierbudget.*(panic|is disabled)' "$WORK/scheduler.log"; then echo "FAIL: errors logged"; exit 1; fi

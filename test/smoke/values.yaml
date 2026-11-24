@@ -16,3 +16,12 @@ scheduler:
         allowance: "2"
         promotedPriority: "75"
         excessPriority: "45"
+        # A P1 may move P1; nothing else may.
+        consolidation: "test-high > test-high,test-mid,test-low; test-mid,test-low > test-mid,test-low"
+  # KAI's own would also move P1 to place P3.
+  actions:
+    consolidation:
+      enabled: false
+    ukai-consolidation:
+      enabled: true
+      priority: 400

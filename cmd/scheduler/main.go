@@ -1,4 +1,4 @@
-// Command scheduler is the stock KAI scheduler with additional plugins.
+// Command scheduler is the stock KAI scheduler with an additional plugin and action.
 package main
 
 import (
@@ -12,8 +12,9 @@ import (
 )
 
 func main() {
-	// KAI adds its own plugins by name in RunApp, which leaves this one registered.
+	// KAI adds its own by name in RunApp, which leaves these registered.
 	framework.RegisterPluginBuilder(tierbudget.Name, tierbudget.New)
+	framework.RegisterAction(tierbudget.NewConsolidation())
 
 	if err := app.RunApp(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)

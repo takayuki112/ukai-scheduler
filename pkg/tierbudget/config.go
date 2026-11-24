@@ -27,12 +27,14 @@ const (
 	argLargeJobs        = "largeJobs"         // excess (default) or normal-if-first
 	argGPUTypeLabel     = "gpuTypeLabel"      // nodeSelector key; default: none, so every GPU has the default weight
 	argGPUWeights       = "gpuWeights"        // type=weight, comma-separated; needs gpuTypeLabel
+	argConsolidation    = "consolidation"     // passes, see Pass; default: never move budgeted, charged or promoted jobs
 	argDefaultWeight    = "defaultGPUWeight"  // units per GPU of any other type; default 1
 )
 
 var knownArgs = []string{
 	argMode, argOwnerLabel, argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
 	argPromotedPriority, argExcessPriority, argLargeJobs, argGPUTypeLabel, argGPUWeights, argDefaultWeight,
+	argConsolidation,
 }
 
 // Mode says whether decisions take effect.
@@ -56,6 +58,8 @@ type Config struct {
 	GPUTypeLabel  string
 	GPUWeights    map[string]float64
 	DefaultWeight float64
+	// Passes are the consolidation passes. None means the default rule.
+	Passes []Pass
 }
 
 // ParseConfig reads plugin arguments. The error lists every problem found.
@@ -72,6 +76,7 @@ func ParseConfig(args framework.PluginArguments) (*Config, error) {
 		Classes:      map[string]tiers.Class{},
 		GPUTypeLabel: p.get(argGPUTypeLabel),
 		GPUWeights:   p.weights(),
+		Passes:       p.passes(),
 	}
 	c.DefaultWeight = 1
 	if p.get(argDefaultWeight) != "" {

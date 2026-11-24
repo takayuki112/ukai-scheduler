@@ -37,6 +37,8 @@ type plugin struct {
 	config *Config
 	ssn    *framework.Session
 	jobs   map[common_info.PodGroupID]*jobState
+	// results is set once they apply to the session.
+	results map[string]tiers.Result
 	// charged lists each owner's jobs that count against the budget.
 	charged map[string][]*jobState
 }
@@ -85,16 +87,20 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 	if p.config.Mode != Enforce {
 		return
 	}
+	warnStockConsolidation(ssn)
 	// Nothing is applied until everything above has succeeded.
 	for id, state := range p.jobs {
 		state.info.Priority = results[string(id)].Priority
 	}
+	p.results = results
+	openSession.Store(p)
 	ssn.AddPrePredicateFn(p.prePredicate)
 	ssn.AddVictimInvariantPrePredicateFn(p.victimInvariantPrePredicate)
 }
 
 func (p *plugin) OnSessionClose(*framework.Session) {
-	p.ssn, p.jobs, p.charged = nil, nil, nil
+	openSession.CompareAndSwap(p, nil)
+	p.ssn, p.jobs, p.charged, p.results = nil, nil, nil, nil
 }
 
 // collect reads the jobs that the configuration covers.
