@@ -48,6 +48,7 @@ var (
 	runMax     = flag.Duration("run-max", 2*time.Minute, "longest job")
 	deleted    = flag.Float64("deleted", 0.1, "share of arrivals at which a random job is deleted")
 	drain      = flag.Duration("drain", 0, "at the end, wait this long for all jobs to finish, and fail if they do not")
+	gangs      = flag.Bool("gangs", true, "some jobs are gangs of two pods")
 	seed       = flag.Int64("seed", 1, "random seed")
 	out        = flag.String("out", "", "CSV file for samples")
 )
@@ -155,7 +156,7 @@ func (d *driver) submit(ctx context.Context) error {
 	owner := fmt.Sprintf("owner-%d", d.r.Intn(*owners))
 	units := []int64{1, 1, 1, 2, 2, 4, 8}[d.r.Intn(7)]
 	pods := []int32{1, 1, 1, 1, 2}[d.r.Intn(5)]
-	if units > 4 {
+	if units > 4 || !*gangs {
 		pods = 1
 	}
 	name := fmt.Sprintf("load-%d-%d", d.run, d.next)

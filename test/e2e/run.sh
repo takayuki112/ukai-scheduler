@@ -7,7 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 CLUSTER=${CLUSTER:-ukai-dev}
 NS=kai-scheduler
 IMAGE=ghcr.io/kai-scheduler/kai-scheduler/ukai-scheduler:smoke
-WORK=$PWD/bin/smoke
+WORK=${WORK:-$PWD/bin/smoke}
 export KUBECONFIG=$WORK/kubeconfig # never the user's own
 [ "$(kubectl config current-context)" = "kind-$CLUSTER" ] || { echo "not on kind-$CLUSTER" >&2; exit 1; }
 
