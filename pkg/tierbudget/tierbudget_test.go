@@ -23,6 +23,8 @@ import (
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/test_utils/jobs_fake"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/test_utils/nodes_fake"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/test_utils/tasks_fake"
+
+	"github.com/takayuki112/ukai-scheduler/pkg/tiers"
 )
 
 const ownerLabel = "example.com/owner"
@@ -432,6 +434,44 @@ func TestGPUMemoryCountsWholeGPUs(t *testing.T) {
 	}
 	if reason := holdOf(open(ssn, testArgs("2")), info, pending); !strings.Contains(reason, "needs 3 units") {
 		t.Errorf("hold %q", reason)
+	}
+}
+
+// KAI's binder turns a fraction into memory. Users can set both, to make a large request look small.
+func TestBoundFractions(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fraction       string
+		memory, device int64
+		node           bool
+		gpus           int64
+		want           tiers.Units
+	}{
+		"bound":                    {"0.5", 5000, 10000, true, 1, 500},
+		"two devices":              {"0.75", 7500, 10000, true, 2, 1500},
+		"rounded as when pending":  {"0.333", 3400, 10000, true, 1, 330},
+		"more memory than it says": {"0.01", 9000, 10000, true, 1, 1000},
+		"not bound":                {"0.01", 9000, 10000, false, 1, 1000},
+		"no fraction":              {"", 5000, 10000, true, 1, 1000},
+		"not a fraction":           {"1.5", 5000, 10000, true, 1, 1000},
+		"not a number":             {"NaN", 5000, 10000, true, 1, 1000},
+		"unknown GPU memory":       {"0.5", 5000, 0, true, 1, 1000},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ssn := session(t, map[string]int{"n0": 4}, []testJob{j("a", "alice", "high", 1, running, 9)})
+			ssn.ClusterInfo.Nodes["n0"].MemoryOfEveryGpuOnNode = tc.device
+			p := open(ssn, testArgs("2"))
+			for _, task := range find(t, ssn, "a").GetAllPodsMap() {
+				task.Pod.Annotations = map[string]string{"gpu-fraction": tc.fraction}
+				task.GpuRequirement = *resource_info.NewGpuResourceRequirementWithMultiFraction(tc.gpus, 0, tc.memory)
+				task.NodeName = ""
+				if tc.node {
+					task.NodeName = "n0"
+				}
+				if got := p.taskUnits(task); got != tc.want {
+					t.Errorf("%v units, want %v", got, tc.want)
+				}
+			}
+		})
 	}
 }
 
