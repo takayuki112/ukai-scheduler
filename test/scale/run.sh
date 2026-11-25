@@ -70,7 +70,9 @@ if [ -n "${MIXED:-}" ]; then
   args+=(--set-string "$T.gpuTypeLabel=gpu-type" --set-string "$T.gpuWeights=small=1\,big=2" --set-string "$T.defaultGPUWeight=2")
   i=0
   for n in $(kubectl get nodes -l type=kwok -o name); do
-    kubectl label "$n" gpu-type="$([ $((i++ % 2)) = 0 ] && echo small || echo big)" --overwrite >/dev/null
+    i=$((i + 1)) t=small
+    if [ $((i % 2)) = 0 ]; then t=big; fi
+    kubectl label "$n" gpu-type="$t" --overwrite >/dev/null
   done
   for q in load-a:100 load-b:40 load-c:0; do
     kubectl apply -f - >/dev/null <<Y
