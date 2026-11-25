@@ -55,10 +55,39 @@ to finish: 9,059 jobs and 548,457 pod events in `enforce`.
 | Jobs that never finished | **73**, all gangs of two pods, see [future work](future.md#gangs-that-lose-a-pod-after-another-has-finished) |
 
 The run counts as failed because of the last row. A 40-minute run of stock KAI left 19 of 2,459 jobs in the
-same way. The waiting jobs also make the memory hard to read: it rose with them, so whether there is a slow
-leak is still to be shown.
+same way. The waiting jobs also make the memory hard to read, as it rose with them.
+
+A second run had jobs of one pod only, two weights of GPU and three queues:
+
+```sh
+NODES=24 test/scale/run.sh setup
+MIXED=1 test/scale/run.sh enforce -mixed -gangs=false -users 12 -jobs 60 -rate 60 -duration 150m -run-min 20s -run-max 90s -drain 30m -seed 7
+```
+
+| | |
+|---|---|
+| Jobs, pod events | 9,059, 157,606 |
+| Budget violations | **0** |
+| Scheduler restarts, caught panics | 0, 0 |
+| Jobs left at the end | 0 |
+| Goroutines, median | 173 throughout |
+| Cycle, median and 95th percentile | 13 ms, 29 ms |
+
+9,018 pods were seen to finish. The test deletes some jobs on purpose, which the other 41 are consistent with, but it does not
+count them.
+
+The scheduler's memory in MiB, over 15 minutes from the minute shown:
+
+| Minute | 0 | 15 | 30 | 45 | 60 | 75 | 90 | 105 | 120 | 135 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Heap, lowest (5th percentile) | 32.0 | 42.7 | 48.8 | 52.7 | 53.4 | 54.9 | 56.1 | 57.5 | 57.3 | 57.3 |
+| Heap, median | 43.1 | 52.0 | 58.6 | 63.5 | 64.4 | 66.3 | 67.1 | 68.2 | 68.3 | 68.3 |
+| Resident, median | 121.9 | 132.6 | 142.1 | 148.9 | 149.9 | 151.3 | 152.9 | 154.8 | 154.5 | 155.1 |
+
+It rose ever more slowly and was level for the last 45 minutes at a steady load. That shows no leak in two and a half hours;
+it does not rule out a slow one over days.
 
 ## What is not tested
 
-Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, a conclusive search for
-memory leaks, several KAI shards, MIG and GPUs by resource claims, and gangs other than Jobs.
+Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, runs longer than
+three hours, several KAI shards, MIG and GPUs by resource claims, and gangs other than Jobs.
