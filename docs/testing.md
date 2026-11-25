@@ -29,12 +29,18 @@ busy laptop:
 
 The differences in cycle time are not due to the plugin alone: other jobs run, and the machine was
 not idle. The scheduler was near its default limit of 512 MiB in all cases, and KAI's binder
-(200 MiB) was killed for lack of memory, under stock KAI too: raise these limits for clusters of this size.
+(200 MiB) and pod-grouper (512 MiB) were killed for lack of memory, under stock KAI too. See
+[memory limits](install.md#memory-limits).
 
 The cluster tests need go, docker, kind, kubectl, helm and jq. They use their own kubeconfig, and
 refuse any context but their kind cluster. Run the smoke test first; it makes the cluster.
 
 ## Long operation
+
+```sh
+NODES=24 test/scale/run.sh setup
+test/scale/run.sh enforce -owners 12 -jobs 60 -rate 60 -duration 150m -run-min 20s -run-max 90s -drain 30m -seed 7
+```
 
 24 simulated nodes, 12 users with a budget of 8, one job a second for 150 minutes, then 30 minutes
 to finish: 9,059 jobs and 548,457 pod events in `enforce`.

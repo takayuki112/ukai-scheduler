@@ -20,6 +20,13 @@ flowchart LR
 | Nobody but KAI can write PodGroups | The user and class are read there, see [security](security.md) |
 | You can edit KAI's Helm values, and restart the scheduler | |
 
+### Memory limits
+
+In a test with 200 nodes and 3,000 jobs, with the default limits, KAI's binder (200 MiB) and
+pod-grouper (512 MiB) were killed for lack of memory, and the scheduler (512 MiB) came within
+20 MiB of its limit. Stock KAI was the same. Compare your cluster's use with the limits before
+you start, and raise them if they are close.
+
 ### Evictions and retries
 
 By default, each eviction counts against a Job's `backoffLimit`, in stock KAI too. To avoid that, set
