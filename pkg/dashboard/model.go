@@ -79,6 +79,8 @@ type View struct {
 	Queues       []Queue
 	Notes        []string
 	Lost         string
+
+	names map[string]string // short, of GPU types
 }
 
 var tierOrder = []tiers.Tier{tiers.Budget, tiers.Held, tiers.Promoted, tiers.Normal, tiers.Excess}
@@ -255,6 +257,15 @@ func Compute(config *tierbudget.Config, user string, d Data) *View {
 		v.Queues = append(v.Queues, Queue{t, q})
 	}
 	slices.SortFunc(v.Queues, func(a, b Queue) int { return cmp.Compare(a.Type, b.Type) })
+
+	var types []string
+	for _, j := range v.Jobs {
+		types = append(types, j.Types...)
+	}
+	for _, q := range v.Queues {
+		types = append(types, q.Type)
+	}
+	v.names = shortNames(types)
 
 	if len(blind) > 0 {
 		slices.Sort(blind)

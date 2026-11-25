@@ -176,12 +176,12 @@ func (c *canvas) types(v *View) {
 		gpus := map[string]tiers.Units{}
 		for _, j := range v.Jobs {
 			if j.Running == running {
-				gpus[strings.Join(slices.Sorted(slices.Values(j.Types)), "+")] += j.GPUs
+				gpus[strings.Join(slices.Sorted(slices.Values(j.Types)), "\x00")] += j.GPUs
 			}
 		}
 		var parts []string
 		for _, t := range slices.Sorted(maps.Keys(gpus)) {
-			parts = append(parts, fmt.Sprintf("%s %s", gpus[t], t))
+			parts = append(parts, v.gpus(gpus[t], strings.Split(t, "\x00")))
 		}
 		if len(parts) > 0 {
 			c.add(plain, "%s  %s", map[bool]string{true: "Uses ", false: "Waits"}[running], strings.Join(parts, ", "))
@@ -195,7 +195,7 @@ func (c *canvas) jobs(v *View) {
 		c.add(plain, "")
 	}
 	if len(v.Jobs) > 0 {
-		c.add(dim, "  %-*s %4s %6s  %-12s %-7s %5s  %s", c.nameWidth(), "JOB", "GPUS", "UNITS", "GPU TYPE", "STATE", "AGE", "CLASS")
+		c.add(dim, "  %-*s  %-16s %6s  %-7s %5s  %s", c.nameWidth(), "JOB", "GPUS", "UNITS", "STATE", "AGE", "CLASS")
 	}
 	for i := 0; i < len(v.Jobs); {
 		tier := v.Jobs[i].Tier
@@ -212,8 +212,7 @@ func (c *canvas) jobs(v *View) {
 			if j.Gone {
 				state = "ending"
 			}
-			c.add(tierStyle[tier], "  %-*s %4s %6s  %-12s %-7s %5s  %s", c.nameWidth(), cut(j.ID, c.nameWidth()), j.GPUs, units(j),
-				cut(strings.Join(j.Types, "+"), 12), state, age(c.Now.Sub(j.Since)), j.ClassName)
+			c.add(tierStyle[tier], "  %-*s  %-16s %6s  %-7s %5s  %s", c.nameWidth(), cut(j.ID, c.nameWidth()), cut(v.gpus(j.GPUs, j.Types), 16), units(j), state, age(c.Now.Sub(j.Since)), j.ClassName)
 			if tier == tiers.Held {
 				c.add(tierStyle[tier], "    %s", j.Reason)
 			}
@@ -233,7 +232,7 @@ func (c *canvas) queues(v *View) {
 	c.add(dim, "No promise: KAI skips jobs that do not fit, and shares GPUs between queues.")
 	c.add(dim, "   # %-10s %-*s %4s %6s %5s  %s", "USER", c.nameWidth(), "JOB", "GPUS", "UNITS", "AGE", "QUEUE")
 	for _, q := range v.Queues {
-		c.add(bold, "%s: %s", queueName(q.Type), position(q, v.User))
+		c.add(bold, "%s: %s", queueName(q.Type, v.name(q.Type)), position(q, v.User))
 		shown := 0
 		for i, j := range q.Jobs {
 			mine := j.User == v.User
@@ -262,11 +261,11 @@ func (c *canvas) queues(v *View) {
 	c.add(plain, "")
 }
 
-func queueName(t string) string {
+func queueName(t, short string) string {
 	if t == anyType || t == unknownType {
 		return "GPUs of " + strings.ReplaceAll(t, "type not visible", "a type that is not visible")
 	}
-	return "GPU type " + t
+	return short
 }
 
 func position(q Queue, user string) string {

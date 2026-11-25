@@ -34,7 +34,7 @@ func config(t *testing.T, change ...string) *tierbudget.Config {
 	args := map[string]string{
 		"mode": "enforce", "userLabel": "example.com/user", "budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid",
 		"budget": "4", "allowance": "4", "promotedPriority": "75", "excessPriority": "45",
-		"gpuTypeLabel": "gpu-type", "gpuWeights": "small=1,big=2", "defaultGPUWeight": "2",
+		"gpuTypeLabel": "gpu-type", "gpuWeights": "small=1,big=2," + rtx + "=1," + h100 + "=2", "defaultGPUWeight": "2",
 	}
 	for i := 0; i < len(change); i += 2 {
 		args[change[i]] = change[i+1]
@@ -105,16 +105,18 @@ func data() Data {
 	return Data{SeesPods: func(string) bool { return true }, GPUMemory: map[string]int64{"n0": 10000}}
 }
 
+const rtx, h100 = "NVIDIA-GeForce-RTX-2080-Ti", "NVIDIA-H100-80GB-HBM3"
+
 func sample() Data {
 	d := data()
-	d.with(job("pg-eval", "alice", "high", "small", 2, 50, runs(40)))
-	d.with(job("pg-train", "alice", "mid", "small", 2, 300, runs(290)))
-	d.with(job("pg-sweep", "alice", "mid", "big", 1, 200, runs(100)))
-	d.with(job("pg-long", "alice", "mid", "big", 2, 90))
-	d.with(job("pg-next", "alice", "high", "big", 2, 20, says("1 node(s): user budget: needs 4 units, using 2 of 4. More")))
-	d.with(job("pg-fit", "bob", "high", "big", 1, 30))
-	d.with(job("pg-wide", "bob", "high", "big", 4, 25))
-	d.with(job("pg-other", "carol", "high", "small", 1, 10))
+	d.with(job("pg-eval", "alice", "high", rtx, 2, 50, runs(40)))
+	d.with(job("pg-train", "alice", "mid", rtx, 2, 300, runs(290)))
+	d.with(job("pg-sweep", "alice", "mid", h100, 1, 200, runs(100)))
+	d.with(job("pg-long", "alice", "mid", h100, 2, 90))
+	d.with(job("pg-next", "alice", "high", h100, 2, 20, says("1 node(s): user budget: needs 4 units, using 2 of 4. More")))
+	d.with(job("pg-fit", "bob", "high", h100, 1, 30))
+	d.with(job("pg-wide", "bob", "high", h100, 4, 25))
+	d.with(job("pg-other", "carol", "high", rtx, 1, 10))
 	return d
 }
 
@@ -157,17 +159,17 @@ func TestTiers(t *testing.T) {
 	if v.Used != 2000 || find(t, v, "pg-long").Units != 4000 {
 		t.Errorf("used %v, units %v", v.Used, find(t, v, "pg-long").Units)
 	}
-	if len(v.Queues) != 2 || v.Queues[0].Type != "big" {
+	if len(v.Queues) != 2 || v.Queues[0].Type != rtx {
 		t.Fatalf("queues %+v", v.Queues)
 	}
 	var order []string
-	for _, j := range v.Queues[0].Jobs {
+	for _, j := range v.Queues[1].Jobs {
 		order = append(order, j.ID)
 	}
 	if want := []string{"team/pg-fit", "team/pg-wide", "team/pg-next"}; !slices.Equal(order, want) {
 		t.Errorf("order %v, want %v", order, want)
 	}
-	if v.Queues[0].Jobs[1].Tier != tiers.Held {
+	if v.Queues[1].Jobs[1].Tier != tiers.Held {
 		t.Error("bob's job over the budget should be held")
 	}
 }
@@ -554,7 +556,7 @@ func TestGPUTypes(t *testing.T) {
 		}
 	}
 	text := draw(t, v, 0)
-	for _, want := range []string{"Uses   2 big, 1 small\n", "Waits  1 any type\n", "GPUs of any type: you are number 1 of 1"} {
+	for _, want := range []string{"Uses   2x big, 1x small\n", "Waits  1x any type\n", "GPUs of any type: you are number 1 of 1"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("no %q in\n%s", want, text)
 		}
@@ -563,5 +565,25 @@ func TestGPUTypes(t *testing.T) {
 	d.NodeTypes = nil
 	if j := find(t, Compute(config(t), "alice", d), "placed"); j.Units != 4000 || j.Types[0] != anyType {
 		t.Errorf("%+v", j)
+	}
+}
+
+func TestShortNames(t *testing.T) {
+	for _, tc := range []map[string]string{
+		{rtx: "2080Ti", h100: "H100", "NVIDIA-A100-SXM4-40GB": "A100", "Tesla-V100-PCIE-16GB": "V100", "NVIDIA-L40S": "L40S", "NVIDIA-RTX-6000-Ada-Generation": "6000 Ada Generation", anyType: anyType},
+		{"NVIDIA-A100-SXM4-40GB": "A100 40GB", "NVIDIA-A100-SXM4-80GB": "A100 80GB"},
+		{"NVIDIA-A100-SXM4-40GB": "NVIDIA-A100-SXM4-40GB", "NVIDIA-A100-PCIE-40GB": "NVIDIA-A100-PCIE-40GB"},
+		{"GeForce-X": "GeForce-X", "Tesla-X": "Tesla-X"},
+		{"small": "small", "": ""},
+	} {
+		var types []string
+		for k := range tc {
+			types = append(types, k, k)
+		}
+		for k, got := range shortNames(types) {
+			if got != tc[k] {
+				t.Errorf("%q: %q, want %q", k, got, tc[k])
+			}
+		}
 	}
 }

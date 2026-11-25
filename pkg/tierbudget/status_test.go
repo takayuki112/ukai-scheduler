@@ -103,12 +103,12 @@ ukai_units{state="pending",tier="budget",user="bob"} 0.5
 ukai_units{state="running",tier="excess",user="bob"} 8
 # HELP ukai_job_priority Effective priority of each job
 # TYPE ukai_job_priority gauge
-ukai_job_priority{namespace="NS",user="alice",podgroup="held",tier="held"} 75
-ukai_job_priority{namespace="NS",user="alice",podgroup="normal",tier="normal"} 50
-ukai_job_priority{namespace="NS",user="alice",podgroup="promoted",tier="promoted"} 75
-ukai_job_priority{namespace="NS",user="alice",podgroup="run",tier="budget"} 75
-ukai_job_priority{namespace="NS",user="bob",podgroup="excess",tier="excess"} 45
-ukai_job_priority{namespace="NS",user="bob",podgroup="waits",tier="budget"} 75
+ukai_job_priority{namespace="NS",podgroup="held",tier="held",user="alice"} 75
+ukai_job_priority{namespace="NS",podgroup="normal",tier="normal",user="alice"} 50
+ukai_job_priority{namespace="NS",podgroup="promoted",tier="promoted",user="alice"} 75
+ukai_job_priority{namespace="NS",podgroup="run",tier="budget",user="alice"} 75
+ukai_job_priority{namespace="NS",podgroup="excess",tier="excess",user="bob"} 45
+ukai_job_priority{namespace="NS",podgroup="waits",tier="budget",user="bob"} 75
 `
 	names := []string{"ukai_active", "ukai_user_budget_units", "ukai_jobs", "ukai_units", "ukai_job_priority"}
 	if err := testutil.CollectAndCompare(collector{}, strings.NewReader(strings.ReplaceAll(want, "NS", ns)), names...); err != nil {
