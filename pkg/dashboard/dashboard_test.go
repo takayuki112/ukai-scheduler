@@ -256,7 +256,7 @@ func TestWithoutPods(t *testing.T) {
 		t.Errorf("%+v", j)
 	}
 	text := draw(t, v, 0)
-	for _, want := range []string{"~2", "add -n team", unknownType + ": you are number 1 of 2"} {
+	for _, want := range []string{"~2", "add -n team", "GPUs of a type that is not visible: you are number 1 of 2"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("no %q in\n%s", want, text)
 		}
@@ -302,7 +302,7 @@ func TestWidths(t *testing.T) {
 
 func TestWideScreen(t *testing.T) {
 	text := draw(t, Compute(config(t), "alice", sample()), 160)
-	if !regexp.MustCompile(`(?m)^budget: .* P1 waiting`).MatchString(text) {
+	if !regexp.MustCompile(`(?m)^  JOB .* P1 waiting`).MatchString(text) {
 		t.Errorf("not side by side:\n%s", text)
 	}
 }
@@ -536,4 +536,32 @@ func TestSettingsFromConfigMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait("deleted", 8000, "does not exist")
+}
+
+func TestGPUTypes(t *testing.T) {
+	d := data()
+	d.NodeTypes = map[string]string{"n0": "big"}
+	d.with(job("chosen", "alice", "high", "small", 1, 9, runs(8)))
+	d.with(job("placed", "alice", "mid", "", 2, 8, runs(7)))
+	d.with(job("waits", "alice", "high", "", 1, 5))
+	v := Compute(config(t), "alice", d)
+	for name, want := range map[string]struct {
+		gpuType     string
+		gpus, units tiers.Units
+	}{"chosen": {"small", 1000, 1000}, "placed": {"big", 2000, 4000}, "waits": {anyType, 1000, 2000}} {
+		if j := find(t, v, name); !slices.Equal(j.Types, []string{want.gpuType}) || j.GPUs != want.gpus || j.Units != want.units {
+			t.Errorf("%s: %v, %v GPUs, %v units", name, j.Types, j.GPUs, j.Units)
+		}
+	}
+	text := draw(t, v, 0)
+	for _, want := range []string{"Uses   2 big, 1 small\n", "Waits  1 any type\n", "GPUs of any type: you are number 1 of 1"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no %q in\n%s", want, text)
+		}
+	}
+	// A charge follows what was asked for, whatever the node.
+	d.NodeTypes = nil
+	if j := find(t, Compute(config(t), "alice", d), "placed"); j.Units != 4000 || j.Types[0] != anyType {
+		t.Errorf("%+v", j)
+	}
 }

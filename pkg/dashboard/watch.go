@@ -138,7 +138,8 @@ func (w *Watcher) informers() []cache.SharedInformer { return slices.Concat(w.gr
 
 // Data is the present state.
 func (w *Watcher) Data() Data {
-	d := Data{GPUMemory: map[string]int64{}, Notes: w.notes, SeesPods: func(ns string) bool { return w.allPods || w.seesPods[ns] }}
+	config, problem := w.settings.Config()
+	d := Data{GPUMemory: map[string]int64{}, NodeTypes: map[string]string{}, Notes: w.notes, SeesPods: func(ns string) bool { return w.allPods || w.seesPods[ns] }}
 	for _, i := range w.groups {
 		for _, o := range i.GetStore().List() {
 			d.Groups = append(d.Groups, o.(*enginev2alpha2.PodGroup))
@@ -152,10 +153,12 @@ func (w *Watcher) Data() Data {
 	for _, i := range w.nodes {
 		for _, o := range i.GetStore().List() {
 			n := o.(*metav1.PartialObjectMetadata)
+			if config.GPUTypeLabel != "" {
+				d.NodeTypes[n.Name] = n.Labels[config.GPUTypeLabel]
+			}
 			d.GPUMemory[n.Name] = parseGPUMemory(n.Labels[constants.NvidiaGpuMemory])
 		}
 	}
-	config, problem := w.settings.Config()
 	if problem != "" {
 		d.Notes = append(slices.Clone(d.Notes), "The settings may be out of date: "+problem)
 	}

@@ -28,6 +28,8 @@ type Data struct {
 	Pods   []*v1.Pod
 	// GPUMemory is that of each GPU of a node, in MiB.
 	GPUMemory map[string]int64
+	// NodeTypes are the GPU types of nodes.
+	NodeTypes map[string]string
 	// SeesPods says whether a namespace's pods are in Pods.
 	SeesPods func(namespace string) bool
 	// Former is what is known of PodGroups that may be gone, by "namespace/name".
@@ -51,7 +53,8 @@ type Job struct {
 	ID, User, ClassName, Queue string
 	Tier                       tiers.Tier
 	Units                      tiers.Units
-	Estimated                  bool // from the PodGroup alone
+	GPUs                       tiers.Units // without weights
+	Estimated                  bool        // from the PodGroup alone
 	Running                    bool
 	Gone                       bool // its PodGroup is
 	Types                      []string
@@ -88,9 +91,13 @@ func UserOf(config *tierbudget.Config, labels map[string]string) string {
 	return labels[config.UserLabel]
 }
 
+// usageOfGPUs is the same without weights.
+type usageOfGPUs struct{ alive, held tiers.Units }
+
 // usage follows the plugin's.
 type usage struct {
 	alive, held tiers.Units
+	gpus        usageOfGPUs
 	active      bool
 	types       []string
 	created     time.Time
@@ -101,6 +108,8 @@ type usage struct {
 // Compute works out what to show a user. It does not modify the data.
 func Compute(config *tierbudget.Config, user string, d Data) *View {
 	v := &View{User: user, Audit: config.Mode != tierbudget.Enforce, Budget: config.Policy.Budget, Notes: slices.Clone(d.Notes), Lost: d.Lost}
+	unweighted := *config
+	unweighted.GPUTypeLabel, unweighted.GPUWeights, unweighted.DefaultWeight = "", nil, 1
 	uses := map[string]*usage{}
 	former := map[string]Group{}
 	vectors := resource_info.NewResourceVectorMap()
@@ -118,19 +127,25 @@ func Compute(config *tierbudget.Config, user string, d Data) *View {
 			former[id] = Group{UserOf(config, pod.Labels), pod.Spec.PriorityClassName}
 		}
 		memory := d.GPUMemory[task.NodeName]
-		n := config.TaskUnits(task, memory)
+		n, gpus := config.TaskUnits(task, memory), unweighted.TaskUnits(task, memory)
 		if pod_status.IsAliveStatus(task.Status) {
 			u.alive += n
+			u.gpus.alive += gpus
 		}
 		if pod_status.IsActiveUsedStatus(task.Status) {
 			u.held += n
+			u.gpus.held += gpus
 			u.active = true
 			if task.GpuRequirement.GpuMemory() > 0 && memory == 0 && pod.Annotations[constants.GpuFraction] != "" {
 				wholeShares = true
 			}
 		}
 		if n > 0 && (pod_status.IsAliveStatus(task.Status) || pod_status.IsActiveUsedStatus(task.Status)) {
-			if t := gpuType(config, pod.Spec.NodeSelector); !slices.Contains(u.types, t) {
+			t := gpuType(config, pod.Spec.NodeSelector)
+			if t == anyType {
+				t = cmp.Or(d.NodeTypes[task.NodeName], t)
+			}
+			if !slices.Contains(u.types, t) {
 				u.types = append(u.types, t)
 			}
 		}
@@ -161,7 +176,8 @@ func Compute(config *tierbudget.Config, user string, d Data) *View {
 		}
 		if d.SeesPods(g.Namespace) {
 			if u := uses[id]; u != nil {
-				j.Units, j.Running, j.Types, j.Reason = max(u.alive, u.held), u.active, u.types, u.reason
+				j.Units, j.GPUs = max(u.alive, u.held), max(u.gpus.alive, u.gpus.held)
+				j.Running, j.Types, j.Reason = u.active, u.types, u.reason
 			}
 		} else {
 			estimate(config, g, j)
@@ -191,7 +207,7 @@ func Compute(config *tierbudget.Config, user string, d Data) *View {
 		}
 		if class := config.Classes[g.ClassName]; u.active && class != tiers.Other {
 			jobs[id] = &Job{
-				ID: id, User: g.User, ClassName: g.ClassName, class: class, Units: u.held, Running: true, Gone: true,
+				ID: id, User: g.User, ClassName: g.ClassName, class: class, Units: u.held, GPUs: u.gpus.held, Running: true, Gone: true,
 				Types: u.types, Created: u.created, Since: u.created,
 			}
 		}
@@ -268,7 +284,8 @@ func estimate(config *tierbudget.Config, g *enginev2alpha2.PodGroup, j *Job) {
 	}
 	s := g.Status.ResourcesStatus
 	allocated := gpus(s.Allocated)
-	j.Units = config.Units(max(allocated, gpus(s.Requested)), nil)
+	n := max(allocated, gpus(s.Requested))
+	j.Units, j.GPUs = config.Units(n, nil), tiers.UnitsOf(n)
 	j.Running, j.Estimated, j.Types = allocated > 0, true, []string{unknownType}
 }
 

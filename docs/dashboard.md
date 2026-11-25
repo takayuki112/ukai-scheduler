@@ -8,31 +8,35 @@ ukai  user alice
 
 Budget [############............] 2 of 4 units
 Jobs   1 budget, 1 held, 1 promoted, 1 normal, 1 excess
+Uses   1 big, 4 small
+Waits  4 big
 
+  JOB                              GPUS  UNITS  GPU TYPE     STATE     AGE  CLASS
 budget: P1 and charged, within the budget
-  team/pg-eval                          2  small        running   40m  high
+  team/pg-eval                        2      2  small        running   40m  high
 
 held: wait for your own budget, even if GPUs are free
-  team/pg-next                          4  big          waiting   20m  high
+  team/pg-next                        2      4  big          waiting   20m  high
     needs 4 units, using 2 of 4
 
 promoted: P2 at P1 priority
-  team/pg-train                         2  small        running    4h  mid
+  team/pg-train                       2      2  small        running    4h  mid
 
 normal: P2 at their own priority
-  team/pg-sweep                         2  big          running    1h  mid
+  team/pg-sweep                       1      2  big          running    1h  mid
 
 excess: P2 below their own priority, evicted first
-  team/pg-long                          4  big          waiting    1h  mid
+  team/pg-long                        2      4  big          waiting    1h  mid
 
 P1 waiting, oldest first
 No promise: KAI skips jobs that do not fit, and shares GPUs between queues.
-big: you are number 3 of 3
-   1 bob        team/pg-fit                           2   30m  q
-   2 bob        team/pg-wide                          8   25m  q  held
-   3 you        team/pg-next                          4   20m  q  held
-small: 1, none of them yours
-   1 carol      team/pg-other                         1   10m  q
+   # USER       JOB                              GPUS  UNITS   AGE  QUEUE
+GPU type big: you are number 3 of 3
+   1 bob        team/pg-fit                         1      2   30m  q
+   2 bob        team/pg-wide                        4      8   25m  q  held
+   3 you        team/pg-next                        2      4   20m  q  held
+GPU type small: 1, none of them yours
+   1 carol      team/pg-other                       1      1   10m  q
 
 Tiers are computed here by the scheduler's rules, and may differ from it briefly.
 ```
@@ -76,7 +80,9 @@ From 160 columns on, jobs and queues are side by side. `NO_COLOR` turns colours 
 - The queue is that of [submission](concepts.md#when-p1-alone-fills-the-cluster). A number in it is no
   promise: KAI skips jobs that do not fit, and between KAI's queues fair share decides. Held jobs keep
   their place.
-- A job without a nodeSelector for the type is under `any type`. `~` marks an estimate from the PodGroup
+- `GPUS` is how many, and `UNITS` is what they cost. The type is that of the nodeSelector. A running job without one
+  shows the type of its node, if you may list nodes, but is charged as one that did not choose. A waiting one is
+  under `any type`. `~` marks an estimate from the PodGroup
   alone: its GPU type is not known, so it has the default weight, and requests by GPU memory are missing.
 - GPUs requested by resource claims are not counted. A pod that KAI has placed but not bound yet counts
   as waiting, for a moment.
@@ -93,7 +99,7 @@ Users need to list and watch:
 |---|---|---|
 | PodGroups (`scheduling.run.ai`) | All namespaces, or at least their own | The queue, and the budget if a user has jobs elsewhere, are incomplete |
 | Pods | Their own namespaces | Their jobs are estimates |
-| Nodes | Optional; only labels are asked for | Running fractions count as whole GPUs |
+| Nodes | Optional; only labels are asked for | Running fractions count as whole GPUs, and jobs that chose no GPU type do not show the one they got |
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
