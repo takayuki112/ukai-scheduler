@@ -32,7 +32,7 @@ var now = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 func config(t *testing.T, change ...string) *tierbudget.Config {
 	t.Helper()
 	args := map[string]string{
-		"mode": "enforce", "ownerLabel": "example.com/user", "budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid",
+		"mode": "enforce", "userLabel": "example.com/user", "budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid",
 		"budget": "4", "allowance": "4", "promotedPriority": "75", "excessPriority": "45",
 		"gpuTypeLabel": "gpu-type", "gpuWeights": "small=1,big=2", "defaultGPUWeight": "2",
 	}
@@ -345,7 +345,7 @@ func start(t *testing.T, c Clients, allPods bool, namespaces ...string) *Watcher
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
-	w, err := Start(ctx, c, config(t), namespaces, allPods)
+	w, err := Start(ctx, c, FixedSettings(config(t)), namespaces, allPods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestFallsBackToNamespaces(t *testing.T) {
 		t.Errorf("jobs %v, notes %q", v.Jobs, v.Notes)
 	}
 	deny(&kai.Fake, "podgroups", "team")
-	if _, err := Start(context.Background(), c, config(t), []string{"team"}, false); err == nil {
+	if _, err := Start(context.Background(), c, FixedSettings(config(t)), []string{"team"}, false); err == nil {
 		t.Error("no error, with nothing to list")
 	}
 }
@@ -455,4 +455,85 @@ func TestLostConnection(t *testing.T) {
 	if d := w.Data(); d.Lost != "" {
 		t.Errorf("lost %q", d.Lost)
 	}
+}
+
+// A namespace that works must not hide that another does not.
+func TestLostNamespace(t *testing.T) {
+	c, _, kai := clients()
+	deny(&kai.Fake, "podgroups", "")
+	w := start(t, c, false, "a", "b")
+	w.connection("pods in a", fmt.Errorf("refused"))
+	w.connection("pods in b", nil)
+	if d := w.Data(); d.Lost != "pods in a: refused" {
+		t.Errorf("lost %q", d.Lost)
+	}
+	if len(w.pods) != 2 || len(w.groups) != 2 {
+		t.Error("informers")
+	}
+}
+
+func TestSettingsFromConfigMap(t *testing.T) {
+	text := func(budget string) string {
+		return "mode: enforce\nuserLabel: example.com/user\nbudgetedClasses: high\nbudget: \"" + budget + "\"\nprotectedPriority: \"75\"\n"
+	}
+	c, kube, _ := clients()
+	maps := kube.CoreV1().ConfigMaps("public")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := WatchSettings(ctx, kube, "public", "settings"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("missing: %v", err)
+	}
+	m := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "public", Name: "settings"}, Data: map[string]string{SettingsKey: text("4")}}
+	other := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "public", Name: "other"}, Data: map[string]string{SettingsKey: text("9")}}
+	for _, o := range []*v1.ConfigMap{m, other} {
+		if _, err := maps.Create(ctx, o, metav1.CreateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := WatchSettings(ctx, kube, "public", "settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := Start(ctx, c, s, []string{"team"}, false)
+	if err != nil || !w.Synced(ctx) {
+		t.Fatal(err)
+	}
+	wait := func(what string, budget tiers.Units, problem string) {
+		t.Helper()
+		for {
+			config, p := s.Config()
+			if config.Policy.Budget == budget && strings.Contains(p, problem) && (problem != "" || p == "") {
+				return
+			}
+			select {
+			case <-w.Changed():
+			case <-ctx.Done():
+				t.Fatalf("%s: budget %v, problem %q", what, config.Policy.Budget, p)
+			}
+		}
+	}
+	wait("first", 4000, "")
+	set := func(text string) {
+		t.Helper()
+		m = m.DeepCopy()
+		m.Data = map[string]string{SettingsKey: text}
+		if _, err := maps.Update(ctx, m, metav1.UpdateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(text("6"))
+	wait("changed", 6000, "")
+	set("budget: 4")
+	wait("invalid", 6000, "userLabel: required")
+	if notes := w.Data().Notes; len(notes) != 1 || !strings.Contains(notes[0], "out of date") {
+		t.Errorf("notes %q", notes)
+	}
+	set(strings.Replace(text("7"), "userLabel", "ownerLabel", 1))
+	wait("old name", 6000, "unknown argument")
+	set(text("8"))
+	wait("valid again", 8000, "")
+	if err := maps.Delete(ctx, "settings", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	wait("deleted", 8000, "does not exist")
 }

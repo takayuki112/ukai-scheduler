@@ -11,6 +11,7 @@ For admins of a cluster that runs **KAI v0.18.9**. Each step is safe to stop at.
 
 | Check | Why |
 |---|---|
+| There is one KAI scheduler, not several shards | Each would give every user a whole budget |
 | KAI is v0.18.9 | It replaces that version's scheduler |
 | Jobs have a label that names their user, on the Job **and** its pods | Budgets are by user |
 | Priority classes, and which are budgeted and promotable | |
@@ -49,7 +50,7 @@ ConfigMaps, which may contain secrets: treat it so.**
 `arguments.yaml` is a map of the [arguments](configuration.md), for example:
 
 ```yaml
-ownerLabel: example.com/owner
+userLabel: example.com/user
 budgetedClasses: high
 promotableClasses: mid
 budget: "4"

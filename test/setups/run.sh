@@ -93,7 +93,7 @@ submit() { # name user class: GPUS, TYPE, QUEUE and ANNOTATIONS may be set
   kubectl create -f - >/dev/null <<Y
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: $queue, example.com/owner: $2}}
+metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: $queue, example.com/user: $2}}
 spec:
   template:
     metadata: {labels: {ukai-test: "1", kai.scheduler/queue: $queue}, annotations: {${ANNOTATIONS:-}}}
@@ -155,7 +155,7 @@ cleanup
 echo "5. P2 are promoted by weight: a big one fills the budget"
 TYPE=big submit e1 erin mid; expect e1 Running
 TYPE=small submit e2 erin mid; expect e2 Running
-metric 'ukai_units{owner="erin",state="running",tier="promoted"} 2'
+metric 'ukai_units{state="running",tier="promoted",user="erin"} 2'
 
 cleanup
 echo "6. Shares of a GPU count as such, and share it"
@@ -186,7 +186,7 @@ TYPE=small share 0.5 i3 ivan high; expect i3 Running
 cleanup
 echo "11. Shares are promoted, and P0 evicts them"
 TYPE=small share 0.5 j1 judy mid; expect j1 Running
-metric 'ukai_units{owner="judy",state="running",tier="promoted"} 0.5'
+metric 'ukai_units{state="running",tier="promoted",user="judy"} 0.5'
 TYPE=small GPUS=4 submit j2 kim top; expect j2 Running; expect j1 Pending
 kubectl delete job j2 >/dev/null; expect j1 Running
 [ "$(phase j1)" = Running ] || die "j1 did not come back"
@@ -203,7 +203,7 @@ QUEUE=test-limited GPUS=1 submit n2 nina high; expect n2 Running
 echo "14. Promotion counts P2 of all queues"
 QUEUE=test-a submit o1 olaf mid; QUEUE=test-b submit o2 olaf mid; QUEUE=test-b submit o3 olaf mid
 expect o1 Running; expect o2 Running
-metric 'ukai_units{owner="olaf",state="running",tier="promoted"} 2'
+metric 'ukai_units{state="running",tier="promoted",user="olaf"} 2'
 cleanup
 echo "15. A held job reclaims nothing for its queue"
 for i in 1 2 3; do QUEUE=test-a GPUS=2 submit "p$i" "pat$i" high; expect "p$i" Running; done # test-a is over its quota of 4

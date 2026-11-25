@@ -27,7 +27,7 @@ import (
 	"github.com/takayuki112/ukai-scheduler/pkg/tiers"
 )
 
-const ownerLabel = "example.com/owner"
+const userLabel = "example.com/user"
 
 const (
 	pending   = pod_status.Pending
@@ -39,25 +39,25 @@ var classPriority = map[string]int32{"top": 90, "high": 75, "workspace": 75, "mi
 
 func testArgs(budget string) framework.PluginArguments {
 	return framework.PluginArguments{
-		"mode": "enforce", "ownerLabel": ownerLabel, "budget": budget, "allowance": "4",
+		"mode": "enforce", "userLabel": userLabel, "budget": budget, "allowance": "4",
 		"budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid",
 		"promotedPriority": "75", "excessPriority": "45",
 	}
 }
 
 type testJob struct {
-	name, owner, class string
-	gpus               float64 // per pod
-	pods               []pod_status.PodStatus
-	node               string   // for pods that are not pending; default n0
-	nodes              []string // if set, each pod\'s node
-	age                int      // minutes since creation
-	started            int      // minutes since start, if running; default age
+	name, user, class string
+	gpus              float64 // per pod
+	pods              []pod_status.PodStatus
+	node              string   // for pods that are not pending; default n0
+	nodes             []string // if set, each pod\'s node
+	age               int      // minutes since creation
+	started           int      // minutes since start, if running; default age
 }
 
 // j is a job of one pod.
-func j(name, owner, class string, gpus float64, status pod_status.PodStatus, age int) testJob {
-	return testJob{name: name, owner: owner, class: class, gpus: gpus, pods: []pod_status.PodStatus{status}, age: age}
+func j(name, user, class string, gpus float64, status pod_status.PodStatus, age int) testJob {
+	return testJob{name: name, user: user, class: class, gpus: gpus, pods: []pod_status.PodStatus{status}, age: age}
 }
 
 func session(t *testing.T, nodes map[string]int, jobs []testJob) *framework.Session {
@@ -104,8 +104,8 @@ func session(t *testing.T, nodes map[string]int, jobs []testJob) *framework.Sess
 			task.Job = info.UID
 			task.Pod.Spec.PriorityClassName = tj.class
 		}
-		if tj.owner != "" {
-			info.PodGroup.Labels = map[string]string{ownerLabel: tj.owner}
+		if tj.user != "" {
+			info.PodGroup.Labels = map[string]string{userLabel: tj.user}
 		}
 		if info.LastStartTimestamp != nil {
 			minutes := tj.age
@@ -202,7 +202,7 @@ func TestScheduling(t *testing.T) {
 			map[string]string{"big": "pending", "small": "placed"}, nil,
 		},
 		{
-			"a held job does not block another owner's preemption", "1", map[string]int{"n0": 2},
+			"a held job does not block another user's preemption", "1", map[string]int{"n0": 2},
 			[]testJob{j("a1", "alice", "high", 1, running, 9), j("victim", "carol", "low", 1, running, 9), j("a2", "alice", "high", 1, pending, 8), j("b1", "bob", "high", 1, pending, 7)},
 			map[string]string{"a1": "running", "a2": "pending", "b1": "placed", "victim": "evicted"},
 			map[string]string{"a2": "placed", "b1": "pending"},
@@ -214,19 +214,19 @@ func TestScheduling(t *testing.T) {
 			map[string]string{"a1": "placed"},
 		},
 		{
-			"no owner is held", "2", map[string]int{"n0": 8},
+			"no user is held", "2", map[string]int{"n0": 8},
 			[]testJob{j("x", "", "high", 1, pending, 9)},
 			map[string]string{"x": "pending"},
 			map[string]string{"x": "placed"},
 		},
 		{
-			"promoted is safe from another owner's P1", "2", map[string]int{"n0": 2},
+			"promoted is safe from another user's P1", "2", map[string]int{"n0": 2},
 			[]testJob{j("p2", "alice", "mid", 2, running, 9), j("b1", "bob", "high", 2, pending, 8)},
 			map[string]string{"p2": "running", "b1": "pending"},
 			map[string]string{"p2": "evicted", "b1": "placed"},
 		},
 		{
-			"promoted gives way to its owner's P1", "2", map[string]int{"n0": 2},
+			"promoted gives way to its user's P1", "2", map[string]int{"n0": 2},
 			[]testJob{j("p2", "alice", "mid", 2, running, 9), j("a1", "alice", "high", 2, pending, 8)},
 			map[string]string{"p2": "evicted", "a1": "placed"}, nil,
 		},
@@ -259,7 +259,7 @@ func TestScheduling(t *testing.T) {
 		},
 		{
 			"a placement that is rolled back uses no budget", "2", map[string]int{"n0": 1},
-			[]testJob{{name: "gang", owner: "alice", class: "high", gpus: 1, pods: []pod_status.PodStatus{pending, pending}, age: 9}, j("a1", "alice", "high", 1, pending, 8)},
+			[]testJob{{name: "gang", user: "alice", class: "high", gpus: 1, pods: []pod_status.PodStatus{pending, pending}, age: 9}, j("a1", "alice", "high", 1, pending, 8)},
 			map[string]string{"gang": "pending", "a1": "placed"}, nil,
 		},
 		{
@@ -341,7 +341,7 @@ func TestReplacementsAndGrowth(t *testing.T) {
 		{"starts too big", []pod_status.PodStatus{pending, pending, pending}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ssn := session(t, map[string]int{"n0": 8}, []testJob{{name: "a", owner: "alice", class: "high", gpus: 1, pods: tc.pods, age: 9}})
+			ssn := session(t, map[string]int{"n0": 8}, []testJob{{name: "a", user: "alice", class: "high", gpus: 1, pods: tc.pods, age: 9}})
 			p := open(ssn, testArgs("2"))
 			if reason := holdOf(p, find(t, ssn, "a"), pending); (reason != "") != tc.held {
 				t.Errorf("hold %q, want held=%v", reason, tc.held)
@@ -516,7 +516,7 @@ func BenchmarkSession(b *testing.B) {
 		src := find(t, template, []string{"a", "b"}[i%2])
 		c := *src
 		c.PodGroup = src.PodGroup.DeepCopy()
-		c.PodGroup.Labels[ownerLabel] = fmt.Sprint("o", i%50)
+		c.PodGroup.Labels[userLabel] = fmt.Sprint("o", i%50)
 		c.UID = common_info.PodGroupID(fmt.Sprint(i))
 		infos[c.UID] = &c
 	}

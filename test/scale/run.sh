@@ -64,6 +64,23 @@ fi
 # So that an eviction does not count against a Job's backoffLimit, and can be counted here.
 args=(--set-string scheduler.args.update-pod-eviction-condition=true --set-string scheduler.plugins.tierbudget.arguments.budget="$BUDGET" --set-string scheduler.plugins.tierbudget.arguments.allowance="$BUDGET")
 check=$BUDGET
+# MIXED=1, with the flag -mixed: two GPU types of different weight, and three queues.
+if [ -n "${MIXED:-}" ]; then
+  T=scheduler.plugins.tierbudget.arguments
+  args+=(--set-string "$T.gpuTypeLabel=gpu-type" --set-string "$T.gpuWeights=small=1\,big=2" --set-string "$T.defaultGPUWeight=2")
+  i=0
+  for n in $(kubectl get nodes -l type=kwok -o name); do
+    kubectl label "$n" gpu-type="$([ $((i++ % 2)) = 0 ] && echo small || echo big)" --overwrite >/dev/null
+  done
+  for q in load-a:100 load-b:40 load-c:0; do
+    kubectl apply -f - >/dev/null <<Y
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata: {name: ${q%:*}}
+spec: {parentQueue: default-parent-queue, resources: {cpu: {quota: -1, limit: -1, overQuotaWeight: 1}, memory: {quota: -1, limit: -1, overQuotaWeight: 1}, gpu: {quota: ${q#*:}, limit: -1, overQuotaWeight: 1}}}
+Y
+  done
+fi
 case $mode in
   enforce) ;;
   audit) args+=(--set-string scheduler.plugins.tierbudget.arguments.mode=audit); check=0 ;;

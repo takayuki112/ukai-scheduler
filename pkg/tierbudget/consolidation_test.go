@@ -135,7 +135,7 @@ func TestConsolidationRestoresAfterPanic(t *testing.T) {
 
 // A partly running job is protected as a whole.
 func TestConsolidationProtectsPartlyRunning(t *testing.T) {
-	ssn := session(t, map[string]int{"n0": 4}, []testJob{{name: "a", owner: "alice", class: "high", gpus: 1, pods: []pod_status.PodStatus{running, pending}, age: 9}})
+	ssn := session(t, map[string]int{"n0": 4}, []testJob{{name: "a", user: "alice", class: "high", gpus: 1, pods: []pod_status.PodStatus{running, pending}, age: 9}})
 	p := open(ssn, testArgs("4"))
 	a := find(t, ssn, "a")
 	if p.allowedByDefault(a) || p.allowedIn(Pass{Place: []string{"high"}, Move: []string{"low"}}, a) {

@@ -5,7 +5,7 @@
 | Word | Meaning |
 |---|---|
 | **Job** | Whatever KAI schedules as one: a PodGroup, usually one Kubernetes Job |
-| **User** | Whose job it is: the value of the label that `ownerLabel` names, for example `example.com/owner: alice`. Normally a person |
+| **User** | Whose job it is: the value of the label that `userLabel` names, for example `example.com/user: alice`. Normally a person |
 | **Unit** | One GPU, times a weight that you may set by GPU type |
 | **Budget** | Units that each user may run at high priority |
 | **Allowance** | Units of medium-priority work that keep their priority |

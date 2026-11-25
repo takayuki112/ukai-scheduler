@@ -22,11 +22,11 @@ func job(id string, c Class, units float64, running bool, n int) Job {
 	if c == Promotable {
 		prio = 50
 	}
-	return Job{ID: id, Owner: "a", Class: c, Units: UnitsOf(units), Priority: prio, Running: running, Created: at(n), Started: at(n)}
+	return Job{ID: id, User: "a", Class: c, Units: UnitsOf(units), Priority: prio, Running: running, Created: at(n), Started: at(n)}
 }
 func p1(id string, u float64, run bool, n int) Job { return job(id, Budgeted, u, run, n) }
 func p2(id string, u float64, run bool, n int) Job { return job(id, Promotable, u, run, n) }
-func owned(o string, j Job) Job                    { j.Owner = o; return j }
+func owned(o string, j Job) Job                    { j.User = o; return j }
 
 func TestAssign(t *testing.T) {
 	late := p2("late", 2, true, 1)
@@ -46,7 +46,7 @@ func TestAssign(t *testing.T) {
 		{"reserves oldest first, and only what fits", policy(), []Job{p1("new", 4, false, 2), p1("old", 1, false, 1), p2("a", 3, true, 3), p2("b", 1, true, 4)}, map[string]Tier{"old": Budget, "new": Budget, "a": Promoted, "b": Normal}},
 		{"running over budget stays", policy(), []Job{p1("x", 8, true, 1), p2("y", 1, true, 2)}, map[string]Tier{"x": Budget, "y": Normal}},
 		{"charged counts but is never held", policy(), []Job{job("w", Charged, 3, true, 1), job("w2", Charged, 9, false, 2), p1("x", 2, false, 3)}, map[string]Tier{"w": Budget, "w2": Budget, "x": Held}},
-		{"owners are separate", policy(), []Job{p1("x", 4, true, 1), p1("y", 4, false, 2), owned("b", p1("z", 4, false, 3))}, map[string]Tier{"x": Budget, "y": Held, "z": Budget}},
+		{"users are separate", policy(), []Job{p1("x", 4, true, 1), p1("y", 4, false, 2), owned("b", p1("z", 4, false, 3))}, map[string]Tier{"x": Budget, "y": Held, "z": Budget}},
 		{"promote, then normal, then excess", policy(), []Job{p2("a", 2, true, 1), p2("b", 2, true, 2), p2("c", 2, true, 3), p2("d", 2, true, 4), p2("e", 2, true, 5)}, map[string]Tier{"a": Promoted, "b": Promoted, "c": Normal, "d": Normal, "e": Excess}},
 		{"starting a P1 demotes all", policy(), []Job{p1("x", 4, true, 9), p2("a", 2, true, 1), p2("b", 2, true, 2), p2("c", 2, true, 3), p2("d", 2, true, 4)}, map[string]Tier{"x": Budget, "a": Normal, "b": Normal, "c": Excess, "d": Excess}},
 		{"P1 that fits demotes while pending", policy(), []Job{p1("x", 4, false, 9), p2("a", 2, true, 1)}, map[string]Tier{"x": Budget, "a": Normal}},
@@ -60,7 +60,7 @@ func TestAssign(t *testing.T) {
 		{"large is excess", policy(), []Job{p2("a", 8, true, 1), p2("b", 8, false, 2)}, map[string]Tier{"a": Excess, "b": Excess}},
 		{"large is normal if first", large, []Job{p2("a", 8, true, 1), p2("b", 8, false, 2), p2("c", 1, true, 3)}, map[string]Tier{"a": Normal, "b": Excess, "c": Promoted}},
 		{"fractions", policy(), []Job{p1("x", 3.5, true, 1), p1("y", 0.5, false, 2), p1("z", 0.6, false, 3)}, map[string]Tier{"x": Budget, "y": Budget, "z": Held}},
-		{"no owner", policy(), []Job{owned("", p1("x", 1, false, 1)), owned("", p1("y", 1, true, 1)), owned("", p2("z", 1, true, 1))}, map[string]Tier{"x": Held, "y": Budget, "z": Excess}},
+		{"no user", policy(), []Job{owned("", p1("x", 1, false, 1)), owned("", p1("y", 1, true, 1)), owned("", p2("z", 1, true, 1))}, map[string]Tier{"x": Held, "y": Budget, "z": Excess}},
 		{"no GPUs or other class", policy(), []Job{p1("x", 0, false, 1), p2("y", 0, true, 1), owned("", p1("z", 0, false, 1)), job("o", Other, 9, true, 1)}, map[string]Tier{"x": Unmanaged, "y": Unmanaged, "z": Unmanaged, "o": Unmanaged}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,7 +135,7 @@ func randomJobs(r *rand.Rand) []Job {
 		// Few distinct times, so ties are common.
 		j := job(fmt.Sprintf("j%02d", r.Intn(1000)*100+i), Class(r.Intn(4)), float64(r.Intn(10))/2, r.Intn(2) == 0, r.Intn(8))
 		j.Started = at(8 + r.Intn(8))
-		j.Owner = []string{"", "a", "a", "b", "b", "c"}[r.Intn(6)]
+		j.User = []string{"", "a", "a", "b", "b", "c"}[r.Intn(6)]
 		jobs[i] = j
 	}
 	return jobs
@@ -176,10 +176,10 @@ func TestPropertyLimits(t *testing.T) {
 		type sums struct{ used, promoted, normal, biggest Units }
 		by := map[string]*sums{}
 		for _, j := range jobs {
-			s := by[j.Owner]
+			s := by[j.User]
 			if s == nil {
 				s = &sums{}
-				by[j.Owner] = s
+				by[j.User] = s
 			}
 			if (j.Class == Budgeted || j.Class == Charged) && j.Running {
 				s.used += j.Units
@@ -187,7 +187,7 @@ func TestPropertyLimits(t *testing.T) {
 			switch res[j.ID].Tier {
 			case Promoted:
 				s.promoted += j.Units
-				if !j.Running || j.Owner == "" {
+				if !j.Running || j.User == "" {
 					t.Errorf("%s promoted while pending or unowned", j.ID)
 				}
 			case Normal:
@@ -200,8 +200,8 @@ func TestPropertyLimits(t *testing.T) {
 			}
 		}
 		for _, j := range jobs {
-			if j.Class == Budgeted && !j.Running && j.Owner != "" && j.Units > 0 {
-				if held := by[j.Owner].used+j.Units > p.Budget; held != (res[j.ID].Tier == Held) {
+			if j.Class == Budgeted && !j.Running && j.User != "" && j.Units > 0 {
+				if held := by[j.User].used+j.Units > p.Budget; held != (res[j.ID].Tier == Held) {
 					t.Errorf("%s: held should be %v", j.ID, held)
 				}
 			}
@@ -218,18 +218,18 @@ func TestPropertyLimits(t *testing.T) {
 	})
 }
 
-func TestPropertyOwnersAreIndependent(t *testing.T) {
+func TestPropertyUsersAreIndependent(t *testing.T) {
 	property(t, func(t *testing.T, _ *rand.Rand, p Policy, jobs []Job) {
 		all := Assign(p, jobs)
 		var mine []Job
 		for _, j := range jobs {
-			if j.Owner == "a" {
+			if j.User == "a" {
 				mine = append(mine, j)
 			}
 		}
 		for id, r := range Assign(p, mine) {
 			if all[id] != r {
-				t.Errorf("%s depends on other owners", id)
+				t.Errorf("%s depends on other users", id)
 			}
 		}
 	})
@@ -242,7 +242,7 @@ func TestPropertyOwnersAreIndependent(t *testing.T) {
 func simulateSwap(t *testing.T, delayStarts bool) (preemptions int) {
 	property(t, func(t *testing.T, r *rand.Rand, p Policy, jobs []Job) {
 		for i := range jobs {
-			jobs[i].Owner = []string{"a", "b", "c"}[r.Intn(3)]
+			jobs[i].User = []string{"a", "b", "c"}[r.Intn(3)]
 			if r.Intn(4) != 0 { // mostly promotable, or few jobs could preempt
 				jobs[i].Class, jobs[i].Priority = Promotable, 50
 			}
@@ -310,7 +310,7 @@ func BenchmarkAssign(b *testing.B) {
 			jobs := make([]Job, n)
 			for i := range jobs {
 				jobs[i] = job(fmt.Sprint(i), Class(1+r.Intn(3)), float64(1+r.Intn(4)), r.Intn(2) == 0, r.Intn(10000))
-				jobs[i].Owner = fmt.Sprint(r.Intn(50))
+				jobs[i].User = fmt.Sprint(r.Intn(50))
 			}
 			b.ReportAllocs()
 			for b.Loop() {

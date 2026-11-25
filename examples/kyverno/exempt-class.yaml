@@ -1,5 +1,5 @@
 # Only the users listed may use the class that is exempt from budgets. This trusts the
-# label that names the user, so it needs owner.yaml. Adapt the class and the users.
+# label that names the user, so it needs user.yaml. Adapt the class and the users.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -8,7 +8,7 @@ metadata:
 spec:
   background: false
   rules:
-    - name: listed-owners
+    - name: listed-users
       match:
         any:
           - resources: {kinds: [Pod], operations: [CREATE]}
@@ -21,6 +21,6 @@ spec:
         deny:
           conditions:
             all:
-              - key: "{{ request.object.metadata.labels.\"example.com/owner\" || '' }}"
+              - key: "{{ request.object.metadata.labels.\"example.com/user\" || '' }}"
                 operator: AnyNotIn
                 value: [carol]

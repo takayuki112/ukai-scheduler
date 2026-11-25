@@ -7,10 +7,12 @@
 | Simulation | Random clusters over many cycles | `SIMULATIONS=100 go test ./pkg/tierbudget` |
 | Smoke | It installs with KAI's chart, loads, and places a pod | `KEEP=1 CLUSTER=ukai-dev test/smoke/run.sh` |
 | End to end | Real pods with fake GPUs: holding, promotion, excess, gangs, consolidation, metrics | `test/e2e/run.sh` |
+| Setups | GPU weights, shares of GPUs, several queues | `test/setups/run.sh` |
+| Kubernetes versions | The smoke, end-to-end and setups suites on 1.32, 1.33, 1.34, 1.36 and 1.37; the others use 1.35 | `test/versions.sh v1.34.11 ...` |
 | Upgrade | Stock to audit to enforce and back, a broken configuration, a wrong rollback; no running job changes | `test/upgrade/run.sh` |
 | Failure | Kills, lost nodes, API outage, failover, stuck pods, changed labels, with the budget sampled throughout | `test/failure/run.sh` |
 | Policies | The Kyverno examples, with impersonated Kubernetes usernames, and that the tricks work without them | `test/kyverno/run.sh` |
-| Scale | Simulated nodes (KWOK) and a burst of 3,000 jobs; the budget is checked at every pod event | `test/scale/run.sh setup`, then `test/scale/run.sh enforce -jobs 3000 -owners 60` |
+| Scale | Simulated nodes (KWOK) and a burst of 3,000 jobs; the budget is checked at every pod event | `test/scale/run.sh setup`, then `test/scale/run.sh enforce -jobs 3000 -users 60` |
 
 ## Scale
 
@@ -39,7 +41,7 @@ refuse any context but their kind cluster. Run the smoke test first; it makes th
 
 ```sh
 NODES=24 test/scale/run.sh setup
-test/scale/run.sh enforce -owners 12 -jobs 60 -rate 60 -duration 150m -run-min 20s -run-max 90s -drain 30m -seed 7
+test/scale/run.sh enforce -users 12 -jobs 60 -rate 60 -duration 150m -run-min 20s -run-max 90s -drain 30m -seed 7
 ```
 
 24 simulated nodes, 12 users with a budget of 8, one job a second for 150 minutes, then 30 minutes
@@ -59,4 +61,4 @@ leak is still to be shown.
 ## What is not tested
 
 Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, a conclusive search for
-memory leaks, and gangs other than Jobs.
+memory leaks, several KAI shards, MIG and GPUs by resource claims, and gangs other than Jobs.

@@ -42,12 +42,16 @@ Tiers are computed here by the scheduler's rules, and may differ from it briefly
     go build ./cmd/ukai-top
     ./ukai-top -user alice -arguments arguments.yaml -n team
 
-Ask your admins for `arguments.yaml`: it must have the scheduler's [arguments](configuration.md), in the
-form that [replay](install.md#1-replay-a-snapshot) takes.
+`arguments.yaml` must have the scheduler's [arguments](configuration.md), in the form that
+[replay](install.md#1-replay-a-snapshot) takes. If your admins keep them in a ConfigMap, name that
+instead, and changes are followed:
+
+    ./ukai-top -user alice -configmap ukai-public/ukai-top -n team
 
 | Flag | Meaning |
 |---|---|
 | `-user` | Whose jobs, as in the user label |
+| `-arguments`, `-configmap` | The settings: a file, or a ConfigMap as namespace/name. One of them is required |
 | `-n a,b` | Namespaces of your jobs; default: that of the kubeconfig's context |
 | `-all-pods` | Read the pods of all namespaces, if you may: exact units and GPU types of others |
 | `-anonymous` | Leave out the names of other users and their jobs |
@@ -103,6 +107,36 @@ rules:
     resources: [nodes]
     verbs: [list, watch]
 ```
+
+To publish the settings, with a namespace and name of your choice:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ukai-top, namespace: ukai-public}
+data:
+  arguments.yaml: |
+    mode: audit
+    userLabel: example.com/user
+    budgetedClasses: high
+    promotableClasses: mid
+    budget: "4"
+    allowance: "4"
+    promotedPriority: "75"
+    excessPriority: "45"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ukai-top, namespace: ukai-public}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [ukai-top]
+    verbs: [list, watch]
+```
+
+Bind both to your users. It is a copy: **change it together with the scheduler's**, or the dashboard is
+wrong.
 
 PodGroups of all namespaces show everyone's job names, users and classes: decide whether that is
 acceptable. `-anonymous` only leaves them out of the screen. **Do not grant pods of all namespaces for

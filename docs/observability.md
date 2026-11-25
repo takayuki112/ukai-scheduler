@@ -11,18 +11,18 @@ On KAI's `/metrics`:
 | `ukai_active` | `mode` | 1, or 0 if stock behaviour applies because of an error |
 | `ukai_last_session_timestamp_seconds` | | When the last scheduling cycle began |
 | `ukai_panics_total` | | Should stay 0 |
-| `ukai_owner_budget_units` | | Budget of each user |
-| `ukai_jobs`, `ukai_units` | `owner`, `tier`, `state` | `state` is `running` or `pending` |
+| `ukai_user_budget_units` | | Budget of each user |
+| `ukai_jobs`, `ukai_units` | `user`, `tier`, `state` | `state` is `running` or `pending` |
 | `ukai_tier_changes_total` | `from`, `to` | Steady growth without new jobs means tiers flap |
-| `ukai_job_priority` | `namespace`, `podgroup`, `owner`, `tier` | With `jobMetrics` |
+| `ukai_job_priority` | `namespace`, `podgroup`, `user`, `tier` | With `jobMetrics` |
 
-The label `owner` is the job's user. Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Useful queries:
+Tiers are `budget`, `held`, `promoted`, `normal` and `excess`. Useful queries:
 
 ```promql
 # Use of the budget by user
 ukai_units{tier="budget",state="running"}
 # Waiting for budget
-sum by (owner) (ukai_units{tier="held"})
+sum by (user) (ukai_units{tier="held"})
 # Alerts
 ukai_active == 0
 increase(ukai_panics_total[10m]) > 0
@@ -36,7 +36,7 @@ With several replicas, only the leader has the gauges.
 Every managed job, with the reason if it is held. On KAI's plugin server, on localhost only:
 
     kubectl -n kai-scheduler port-forward deployment/kai-scheduler-default 8081
-    curl 'localhost:8081/tiers?owner=bob'
+    curl 'localhost:8081/tiers?user=bob'
 
 ```json
 {
@@ -45,7 +45,7 @@ Every managed job, with the reason if it is held. On KAI's plugin server, on loc
   "budget": 4,
   "jobs": [
     {
-      "namespace": "team", "name": "pg-eval2", "owner": "bob", "class": "high",
+      "namespace": "team", "name": "pg-eval2", "user": "bob", "class": "high",
       "running": false, "units": 2, "tier": "held",
       "priority": 75, "classPriority": 75,
       "reason": "needs 2 units, using 4 of 4"

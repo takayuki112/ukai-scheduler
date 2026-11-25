@@ -67,14 +67,14 @@ metadata:
   name: train
   labels:
     kai.scheduler/queue: team
-    example.com/owner: alice        # may be set for you
+    example.com/user: alice        # may be set for you
 spec:
   backoffLimit: 20
   template:
     metadata:
       labels:
         kai.scheduler/queue: team
-        example.com/owner: alice    # also here
+        example.com/user: alice    # also here
     spec:
       schedulerName: kai-scheduler
       priorityClassName: mid        # your P2

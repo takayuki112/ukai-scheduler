@@ -19,7 +19,7 @@ func drop(t *testing.T, ssn *framework.Session, name, class, label string) {
 		task.Pod.Spec.PriorityClassName = class
 		task.Pod.Labels = map[string]string{}
 		if label != "" {
-			task.Pod.Labels[ownerLabel] = label
+			task.Pod.Labels[userLabel] = label
 		}
 	}
 	delete(ssn.ClusterInfo.PodGroupInfos, info.UID)
@@ -28,7 +28,7 @@ func drop(t *testing.T, ssn *framework.Session, name, class, label string) {
 func TestOrphans(t *testing.T) {
 	jobs := func(class string, status pod_status.PodStatus) []testJob {
 		return []testJob{
-			{name: "gone", owner: "alice", class: class, gpus: 1, pods: []pod_status.PodStatus{status, status}, age: 9},
+			{name: "gone", user: "alice", class: class, gpus: 1, pods: []pod_status.PodStatus{status, status}, age: 9},
 			j("a", "alice", "high", 1, pending, 8), j("b", "bob", "high", 1, pending, 7),
 		}
 	}
@@ -45,7 +45,7 @@ func TestOrphans(t *testing.T) {
 		{"known, and the label lies", "high", releasing, true, "bob", true},
 		{"after a restart, by label", "high", releasing, false, "alice", true},
 		{"after a restart, without a label", "high", releasing, false, "", false},
-		{"of another owner", "high", releasing, false, "carol", false},
+		{"of another user", "high", releasing, false, "carol", false},
 		{"known, and the pod's class lies", "low/high", releasing, true, "", false},
 		{"known, and the pod's class lies the other way", "high/low", releasing, true, "", true},
 		{"charged", "workspace", releasing, true, "", true},
@@ -82,7 +82,7 @@ func TestOrphans(t *testing.T) {
 					var found bool
 					for _, s := range LastStatus().Jobs {
 						if s.Orphan {
-							found = s.Owner == "alice" && s.Running && s.Units == 2 && s.Tier == tiers.Budget
+							found = s.User == "alice" && s.Running && s.Units == 2 && s.Tier == tiers.Budget
 						}
 						if s.Name == "a" && !strings.Contains(s.Reason, "using 2 of 2") {
 							t.Errorf("reason %q", s.Reason)

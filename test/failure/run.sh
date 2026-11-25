@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Breaks things on a cluster made by test/smoke/run.sh with KEEP=1. Throughout, samples that no owner's P1 pods hold
+# Breaks things on a cluster made by test/smoke/run.sh with KEEP=1. Throughout, samples that no user's P1 pods hold
 # more than the budget, and at the end that nothing panicked.
 set -euo pipefail
 
@@ -23,17 +23,17 @@ gpus() { # node count
   kubectl patch node "$1" --subresource=status --type=merge \
     -p "{\"status\":{\"capacity\":{\"nvidia.com/gpu\":\"$2\"},\"allocatable\":{\"nvidia.com/gpu\":\"$2\"}}}" >/dev/null
 }
-manifest() { # name owner class gpus [command]
+manifest() { # name user class gpus [command]
   cat <<Y
 ---
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/owner: $2}}
+metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/user: $2}}
 spec:
   backoffLimit: 0
   podFailurePolicy: {rules: [{action: Ignore, onPodConditions: [{type: DisruptionTarget}]}]}
   template:
-    metadata: {labels: {ukai-test: "1", owner: $2, example.com/owner: $2, class: $3, kai.scheduler/queue: default-queue}}
+    metadata: {labels: {ukai-test: "1", user: $2, example.com/user: $2, class: $3, kai.scheduler/queue: default-queue}}
     spec:
       schedulerName: kai-scheduler
       priorityClassName: test-$3
@@ -59,12 +59,12 @@ expect() { # name phase [seconds]: reached in time, and kept for 8 s
   ok "$1 $2"
 }
 scheduler() { kubectl -n $NS rollout status deployment/kai-scheduler-default --timeout=180s >/dev/null; }
-# Owners whose bound and unfinished P1 pods hold more than the budget.
+# Users whose bound and unfinished P1 pods hold more than the budget.
 violations() {
   jq -c --argjson b $BUDGET '[.items[] | select(.metadata.labels.class == "high" and .spec.nodeName != null
       and (.status.phase == "Pending" or .status.phase == "Running"))]
-    | group_by(.metadata.labels.owner)[]
-    | {owner: .[0].metadata.labels.owner, units: (map(.spec.containers[0].resources.limits["nvidia.com/gpu"] | tonumber) | add), pods: map(.metadata.name)}
+    | group_by(.metadata.labels.user)[]
+    | {user: .[0].metadata.labels.user, units: (map(.spec.containers[0].resources.limits["nvidia.com/gpu"] | tonumber) | add), pods: map(.metadata.name)}
     | select(.units > $b)'
 }
 samples=$WORK/samples violated=$WORK/violations
@@ -93,22 +93,22 @@ Y
 done
 watch_budget & watcher=$!
 
-echo "1. Fourteen P1 of one owner at once"
+echo "1. Fourteen P1 of one user at once"
 for i in $(seq 14); do manifest "b$i" alice high 1; done | kubectl create -f - >/dev/null
-for _ in $(seq 30); do [ "$(kubectl get pods -l owner=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] && break; sleep 2; done
+for _ in $(seq 30); do [ "$(kubectl get pods -l user=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] && break; sleep 2; done
 sleep 8
-[ "$(kubectl get pods -l owner=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] || fail "not two"
+[ "$(kubectl get pods -l user=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] || fail "not two"
 ok "two run"
 
 echo "2. The scheduler is killed repeatedly while jobs come and go"
 for i in 1 2 3 4 5 6 7 8; do
   kubectl -n $NS delete pod -l app=kai-scheduler-default --force --grace-period=0 >/dev/null 2>&1
-  j=$(kubectl get pods -l owner=alice --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.labels.job-name}')
+  j=$(kubectl get pods -l user=alice --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.labels.job-name}')
   kubectl delete job "$j" --wait=false >/dev/null
   sleep 6
 done
 scheduler; sleep 10
-[ "$(kubectl get pods -l owner=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] || fail "not two"
+[ "$(kubectl get pods -l user=alice --field-selector=status.phase=Running --no-headers | wc -l | tr -d ' ')" = 2 ] || fail "not two"
 ok "two run"
 clean
 
@@ -152,16 +152,16 @@ echo "5. Labels change while jobs run"
 submit l1 alice high 2; expect l1 Running
 submit l2 bob high 2; expect l2 Running
 u=$(uid l1)$(uid l2)
-kubectl label podgroup "$(group l1)" example.com/owner=bob --overwrite >/dev/null # now bob is over
+kubectl label podgroup "$(group l1)" example.com/user=bob --overwrite >/dev/null # now bob is over
 sleep 10
 [ "$(uid l1)$(uid l2)" = "$u" ] || fail "restarted"
-ok "an owner that is over budget keeps its jobs"
+ok "a user that is over budget keeps its jobs"
 submit l3 bob high 1; expect l3 Pending
-kubectl label podgroup "$(group l1)" example.com/owner- >/dev/null # no owner
+kubectl label podgroup "$(group l1)" example.com/user- >/dev/null # no user
 sleep 10
 [ "$(uid l1)$(uid l2)" = "$u" ] || fail "restarted"
-echo "     the label is now '$(kubectl get podgroup "$(group l1)" -o jsonpath='{.metadata.labels.example\.com/owner}')'"
-kubectl label podgroup "$(group l3)" example.com/owner- >/dev/null
+echo "     the label is now '$(kubectl get podgroup "$(group l1)" -o jsonpath='{.metadata.labels.example\.com/user}')'"
+kubectl label podgroup "$(group l3)" example.com/user- >/dev/null
 expect l3 Pending
 ok "unowned is held"
 clean

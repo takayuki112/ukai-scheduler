@@ -53,7 +53,7 @@ denied() { # what text command...
 }
 trap 'rm -f /tmp/ukai-out.$$' EXIT
 submit() { local u=$1; shift; job "$@" | as "$u" create -f -; }
-label() { kubectl get "$@" -o jsonpath='{.metadata.labels.example\.com/owner}'; }
+label() { kubectl get "$@" -o jsonpath='{.metadata.labels.example\.com/user}'; }
 wait_for() { for _ in $(seq 40); do [ -n "$(kubectl get "$@" -o name 2>/dev/null)" ] && return; sleep 1; done; echo "FAIL: no $*"; exit 1; }
 reset() { kubectl delete jobs,cronjobs,deployments,pods --all --force --grace-period=0 >/dev/null 2>&1 || true; }
 
@@ -62,15 +62,15 @@ reset
 echo "Without the policies, all of it works, so the tests test something"
 sleep 5
 allowed "a long grace period" submit alice w1 "" "" "terminationGracePeriodSeconds: 99999"
-allowed "another's owner label" submit alice w2 "example.com/owner: bob"
+allowed "another's user label" submit alice w2 "example.com/user: bob"
 allowed "the exempt class" submit alice w3 "" "" "priorityClassName: test-top"
 allowed "the exempt class by label" submit alice w4 "priorityClassName: test-top" "" "priorityClassName: test-high"
 wait_for podgroups; sleep 5
 [ "$(kubectl get podgroups -o json | jq -r '.items[] | select(.metadata.ownerReferences[0].name == "w4").spec.priorityClassName')" = test-top ] || { echo "FAIL: KAI ignores the label, so kai-overrides.yaml is needless"; exit 1; }
 echo "  ok: and KAI honours that label over the pod spec"
 pg=$(kubectl get podgroups -o json | jq -r '.items[] | select(.metadata.ownerReferences[0].name == "w2").metadata.name')
-[ "$(label podgroup "$pg")" = bob ] || { echo "FAIL: PodGroup owner"; exit 1; }
-allowed "relabelling a PodGroup" as alice label podgroup "$pg" example.com/owner=carol --overwrite
+[ "$(label podgroup "$pg")" = bob ] || { echo "FAIL: PodGroup user"; exit 1; }
+allowed "relabelling a PodGroup" as alice label podgroup "$pg" example.com/user=carol --overwrite
 reset
 
 kubectl apply -f "${POLICIES:-examples/kyverno}" >/dev/null
@@ -84,32 +84,32 @@ allowed "300" submit alice g2 "" "" "terminationGracePeriodSeconds: 300"
 allowed "the default" submit alice g3
 denied "an hour on a bare pod" "at most 300" as alice run g4 --image=busybox:1.37 --overrides='{"spec":{"terminationGracePeriodSeconds":3600}}'
 
-echo "Owner label"
-allowed "another's owner label is overwritten" submit alice o1 "example.com/owner: bob" "example.com/owner: bob"
+echo "User label"
+allowed "another's user label is overwritten" submit alice o1 "example.com/user: bob" "example.com/user: bob"
 wait_for pods -l job-name=o1
-[ "$(label job o1)/$(kubectl get pods -l job-name=o1 -o jsonpath='{.items[0].metadata.labels.example\.com/owner}')" = alice/alice ] || { echo "FAIL: o1 is $(label job o1)"; exit 1; }
+[ "$(label job o1)/$(kubectl get pods -l job-name=o1 -o jsonpath='{.items[0].metadata.labels.example\.com/user}')" = alice/alice ] || { echo "FAIL: o1 is $(label job o1)"; exit 1; }
 for _ in $(seq 30); do pg=$(kubectl get podgroups -o json | jq -r '.items[] | select(.metadata.ownerReferences[0].name == "o1").metadata.name'); [ -n "$pg" ] && break; sleep 1; done
 [ "$(label podgroup "$pg")" = alice ] || { echo "FAIL: PodGroup is $(label podgroup "$pg")"; exit 1; }
 echo "  ok: on the Job, its pod and its PodGroup"
 allowed "a user name with @" submit bob@example.com o2
 [ "$(label job o2)" = bob-at-example.com ] || { echo "FAIL: o2 is $(label job o2)"; exit 1; }
-allowed "a bare pod" as alice run o3 --image=busybox:1.37 --labels=example.com/owner=bob
+allowed "a bare pod" as alice run o3 --image=busybox:1.37 --labels=example.com/user=bob
 [ "$(label pod o3)" = alice ] || { echo "FAIL: o3"; exit 1; }
 allowed "a CronJob" as alice create cronjob o4 --image=busybox:1.37 --schedule='* * * * *' -- sleep 100
-[ "$(kubectl get cronjob o4 -o jsonpath='{.metadata.labels.example\.com/owner}{.spec.jobTemplate.metadata.labels.example\.com/owner}{.spec.jobTemplate.spec.template.metadata.labels.example\.com/owner}')" = alicealicealice ] || { echo "FAIL: o4"; exit 1; }
+[ "$(kubectl get cronjob o4 -o jsonpath='{.metadata.labels.example\.com/user}{.spec.jobTemplate.metadata.labels.example\.com/user}{.spec.jobTemplate.spec.template.metadata.labels.example\.com/user}')" = alicealicealice ] || { echo "FAIL: o4"; exit 1; }
 allowed "a Deployment" as alice create deployment o5 --image=busybox:1.37 -- sleep 100
-[ "$(label deployment o5)$(kubectl get deployment o5 -o jsonpath='{.spec.template.metadata.labels.example\.com/owner}')" = alicealice ] || { echo "FAIL: o5"; exit 1; }
+[ "$(label deployment o5)$(kubectl get deployment o5 -o jsonpath='{.spec.template.metadata.labels.example\.com/user}')" = alicealice ] || { echo "FAIL: o5"; exit 1; }
 kubectl rollout status deployment/o5 --timeout=90s >/dev/null && echo "  ok: which runs"
-denied "relabelling a Job" "cannot be changed" as alice label job o1 example.com/owner=bob --overwrite
-denied "removing the label" "cannot be changed" as alice label job o1 example.com/owner-
-denied "relabelling a pod" "cannot be changed" as alice label pod o3 example.com/owner=bob --overwrite
-denied "relabelling a Deployment's template" "cannot be changed" as alice patch deployment o5 --type=merge -p '{"spec":{"template":{"metadata":{"labels":{"example.com/owner":"bob"}}}}}'
-denied "relabelling a CronJob's template" "cannot be changed" as alice patch cronjob o4 --type=merge -p '{"spec":{"jobTemplate":{"metadata":{"labels":{"example.com/owner":"bob"}}}}}'
+denied "relabelling a Job" "cannot be changed" as alice label job o1 example.com/user=bob --overwrite
+denied "removing the label" "cannot be changed" as alice label job o1 example.com/user-
+denied "relabelling a pod" "cannot be changed" as alice label pod o3 example.com/user=bob --overwrite
+denied "relabelling a Deployment's template" "cannot be changed" as alice patch deployment o5 --type=merge -p '{"spec":{"template":{"metadata":{"labels":{"example.com/user":"bob"}}}}}'
+denied "relabelling a CronJob's template" "cannot be changed" as alice patch cronjob o4 --type=merge -p '{"spec":{"jobTemplate":{"metadata":{"labels":{"example.com/user":"bob"}}}}}'
 allowed "another label" as alice label job o1 note=x
 allowed "scaling" as alice scale deployment o5 --replicas=2
 
 echo "PodGroups"
-denied "relabelling a PodGroup" "managed by KAI" as alice label podgroup "$pg" example.com/owner=bob --overwrite
+denied "relabelling a PodGroup" "managed by KAI" as alice label podgroup "$pg" example.com/user=bob --overwrite
 denied "deleting a PodGroup" "managed by KAI" as alice delete podgroup "$pg"
 denied "creating a PodGroup" "managed by KAI" bash -c "printf 'apiVersion: scheduling.run.ai/v2alpha2\nkind: PodGroup\nmetadata: {name: x}\nspec: {minMember: 1, queue: default-queue}\n' | kubectl --as=alice create -f -"
 allowed "deleting the Job" as alice delete job o1

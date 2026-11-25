@@ -55,7 +55,7 @@ func run(w io.Writer, snapshotPath, argsPath string, all bool) error {
 	}
 
 	tab := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tab, "JOB\tOWNER\tCLASS\tUNITS\tSTATE\tTIER\tPRIORITY\tSTOCK\tWITH PLUGIN\tREASON")
+	fmt.Fprintln(tab, "JOB\tUSER\tCLASS\tUNITS\tSTATE\tTIER\tPRIORITY\tSTOCK\tWITH PLUGIN\tREASON")
 	seen := map[string]bool{}
 	counts := map[tiers.Tier]int{}
 	for _, j := range with.Status.Jobs {
@@ -74,7 +74,7 @@ func run(w io.Writer, snapshotPath, argsPath string, all bool) error {
 		if j.Priority != j.ClassPriority {
 			priority = fmt.Sprintf("%d (was %d)", j.Priority, j.ClassPriority)
 		}
-		fmt.Fprintf(tab, "%s\t%s\t%s\t%g\t%s\t%s\t%s\t%s\t%s\t%s\n", name, cmp.Or(j.Owner, "-"), j.Class, j.Units,
+		fmt.Fprintf(tab, "%s\t%s\t%s\t%g\t%s\t%s\t%s\t%s\t%s\t%s\n", name, cmp.Or(j.User, "-"), j.Class, j.Units,
 			state, j.Tier, priority, show(a), show(b), j.Reason)
 	}
 	// Other jobs, if the plugin changes what happens to them.

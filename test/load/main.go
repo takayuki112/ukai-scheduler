@@ -1,5 +1,5 @@
 // Command load submits random jobs to a test cluster with simulated nodes, checks at
-// every pod event that no owner holds more than the budget, and reports the scheduler's
+// every pod event that no user holds more than the budget, and reports the scheduler's
 // latency and memory. See test/scale/run.sh.
 package main
 
@@ -30,16 +30,16 @@ import (
 )
 
 const (
-	namespace  = "default"
-	testLabel  = "ukai-load"
-	ownerLabel = "example.com/owner"
-	gpu        = "nvidia.com/gpu"
+	namespace = "default"
+	testLabel = "ukai-load"
+	userLabel = "example.com/user"
+	gpu       = "nvidia.com/gpu"
 )
 
 var (
 	kubeconfig = flag.String("kubeconfig", "", "kubeconfig of the test cluster")
 	contextArg = flag.String("context", "", "refuse any other current context")
-	owners     = flag.Int("owners", 20, "number of owners")
+	users      = flag.Int("users", 20, "number of users")
 	budget     = flag.Int64("budget", 8, "budget to check, or 0 not to")
 	burst      = flag.Int("jobs", 0, "jobs submitted at the start")
 	rate       = flag.Float64("rate", 0, "further jobs per minute")
@@ -48,23 +48,24 @@ var (
 	runMax     = flag.Duration("run-max", 2*time.Minute, "longest job")
 	deleted    = flag.Float64("deleted", 0.1, "share of arrivals at which a random job is deleted")
 	drain      = flag.Duration("drain", 0, "at the end, wait this long for all jobs to finish, and fail if they do not")
+	mixed      = flag.Bool("mixed", false, "jobs ask for GPU types, where a big GPU is 2 units, and use several queues")
 	gangs      = flag.Bool("gangs", true, "some jobs are gangs of two pods")
 	seed       = flag.Int64("seed", 1, "random seed")
 	out        = flag.String("out", "", "CSV file for samples")
 )
 
 type podState struct {
-	owner, class, node string
-	units              int64
-	live               bool // bound and not finished
-	created, started   time.Time
+	user, class, node string
+	units             int64
+	live              bool // bound and not finished
+	created, started  time.Time
 }
 
 // watcher follows every pod event.
 type watcher struct {
 	sync.Mutex
 	pods       map[string]*podState
-	held       map[string]int64 // by owner, P1 only
+	held       map[string]int64 // by user, P1 only
 	events     int
 	violations int
 	started    map[string]int
@@ -72,6 +73,14 @@ type watcher struct {
 	finished   int
 	waits      map[string][]time.Duration
 	short      int // evicted within 30 s of starting
+}
+
+// weight must be as run.sh configures it.
+func weight(pod *v1.Pod) int64 {
+	if *mixed && pod.Spec.NodeSelector["gpu-type"] != "small" {
+		return 2
+	}
+	return 1
 }
 
 func live(pod *v1.Pod) bool {
@@ -86,8 +95,8 @@ func (w *watcher) update(pod *v1.Pod, gone bool) {
 	old := w.pods[key]
 	if old == nil {
 		old = &podState{
-			owner: pod.Labels[ownerLabel], class: pod.Spec.PriorityClassName, created: pod.CreationTimestamp.Time,
-			units: pod.Spec.Containers[0].Resources.Limits.Name(gpu, resource.DecimalSI).Value(),
+			user: pod.Labels[userLabel], class: pod.Spec.PriorityClassName, created: pod.CreationTimestamp.Time,
+			units: weight(pod) * pod.Spec.Containers[0].Resources.Limits.Name(gpu, resource.DecimalSI).Value(),
 		}
 		w.pods[key] = old
 	}
@@ -106,13 +115,13 @@ func (w *watcher) update(pod *v1.Pod, gone bool) {
 	}
 	if old.class == "test-high" && now != old.live {
 		if now {
-			w.held[old.owner] += old.units
-			if *budget > 0 && w.held[old.owner] > *budget {
+			w.held[old.user] += old.units
+			if *budget > 0 && w.held[old.user] > *budget {
 				w.violations++
-				log.Printf("OVER BUDGET: %s holds %d after %s", old.owner, w.held[old.owner], pod.Name)
+				log.Printf("OVER BUDGET: %s holds %d after %s", old.user, w.held[old.user], pod.Name)
 			}
 		} else {
-			w.held[old.owner] -= old.units
+			w.held[old.user] -= old.units
 		}
 	}
 	// KAI sets this condition on pods it evicts, as run.sh asks it to.
@@ -153,7 +162,7 @@ type driver struct {
 
 func (d *driver) submit(ctx context.Context) error {
 	class := []string{"test-top", "test-high", "test-high", "test-high", "test-mid", "test-mid", "test-mid", "test-mid", "test-low", "test-low"}[d.r.Intn(10)]
-	owner := fmt.Sprintf("owner-%d", d.r.Intn(*owners))
+	user := fmt.Sprintf("user-%d", d.r.Intn(*users))
 	units := []int64{1, 1, 1, 2, 2, 4, 8}[d.r.Intn(7)]
 	pods := []int32{1, 1, 1, 1, 2}[d.r.Intn(5)]
 	if units > 4 || !*gangs {
@@ -162,7 +171,18 @@ func (d *driver) submit(ctx context.Context) error {
 	name := fmt.Sprintf("load-%d-%d", d.run, d.next)
 	run := *runMin + time.Duration(d.r.Int63n(int64(*runMax-*runMin)+1))
 	d.next++
-	labels := map[string]string{testLabel: "1", ownerLabel: owner, "kai.scheduler/queue": "default-queue"}
+	labels := map[string]string{testLabel: "1", userLabel: user, "kai.scheduler/queue": "default-queue"}
+	queue, selector := "default-queue", map[string]string{"type": "kwok"}
+	if *mixed {
+		queue = []string{"load-a", "load-b", "load-c"}[d.r.Intn(3)]
+		if t := []string{"small", "big", ""}[d.r.Intn(3)]; t != "" {
+			selector["gpu-type"] = t
+		}
+		if w := weight(&v1.Pod{Spec: v1.PodSpec{NodeSelector: selector}}); w > 1 {
+			units = max(1, units/w) // so that it fits a budget
+		}
+	}
+	labels["kai.scheduler/queue"] = queue
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: map[string]string{"kai.scheduler/batch-min-member": strconv.Itoa(int(pods))}},
 		Spec: batchv1.JobSpec{
@@ -176,7 +196,7 @@ func (d *driver) submit(ctx context.Context) error {
 				Spec: v1.PodSpec{
 					SchedulerName: "kai-scheduler", PriorityClassName: class, RestartPolicy: v1.RestartPolicyNever,
 					AutomountServiceAccountToken: ptr.To(false),
-					NodeSelector:                 map[string]string{"type": "kwok"},
+					NodeSelector:                 selector,
 					Tolerations:                  []v1.Toleration{{Key: "kwok.x-k8s.io/node", Operator: v1.TolerationOpExists}},
 					Containers: []v1.Container{{
 						Name: "main", Image: "none",

@@ -22,12 +22,10 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
 
 	kaiclient "github.com/kai-scheduler/KAI-scheduler/pkg/apis/client/clientset/versioned"
 
 	"github.com/takayuki112/ukai-scheduler/pkg/dashboard"
-	"github.com/takayuki112/ukai-scheduler/pkg/tierbudget"
 )
 
 const (
@@ -40,7 +38,8 @@ func main() {
 	flags := flag.NewFlagSet("ukai-top", flag.ExitOnError)
 	var (
 		user       = flags.String("user", "", "whose jobs (required)")
-		arguments  = flags.String("arguments", "", "YAML map of the plugin's arguments, as for replay (required)")
+		arguments  = flags.String("arguments", "", "YAML file with the plugin's arguments, as for replay")
+		configMap  = flags.String("configmap", "", "or the ConfigMap namespace/name with them, whose changes are followed")
 		kubeconfig = flags.String("kubeconfig", "", "kubeconfig, if not the usual one")
 		kubeCtx    = flags.String("context", "", "context, if not the current one")
 		namespaces = flags.String("n", "", "comma-separated namespaces of your jobs; default: the context's")
@@ -50,7 +49,7 @@ func main() {
 		once       = flags.Bool("once", false, "print once, and exit; also if the output is not a terminal")
 	)
 	_ = flags.Parse(os.Args[1:]) // exits on errors
-	if *user == "" || *arguments == "" || flags.NArg() > 0 {
+	if *user == "" || (*arguments == "") == (*configMap == "") || flags.NArg() > 0 {
 		flags.Usage()
 		os.Exit(2)
 	}
@@ -61,25 +60,13 @@ func main() {
 	defer stop()
 	options := dashboard.Options{Others: !*anonymous, Limit: *limit}
 	tty := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
-	if err := run(ctx, *user, *arguments, *kubeconfig, *kubeCtx, *namespaces, *allPods, *once || !tty, options); err != nil && !errors.Is(err, context.Canceled) {
+	if err := run(ctx, *user, *arguments, *configMap, *kubeconfig, *kubeCtx, *namespaces, *allPods, *once || !tty, options); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(os.Stderr, dashboard.Clean(err.Error()))
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, user, arguments, kubeconfig, kubeCtx, namespaces string, allPods, once bool, options dashboard.Options) error {
-	text, err := os.ReadFile(arguments)
-	if err != nil {
-		return err
-	}
-	var args map[string]string
-	if err := yaml.UnmarshalStrict(text, &args); err != nil {
-		return fmt.Errorf("%s: all values must be strings: %w", arguments, err)
-	}
-	config, err := tierbudget.ParseConfig(args)
-	if err != nil {
-		return err
-	}
+func run(ctx context.Context, user, arguments, configMap, kubeconfig, kubeCtx, namespaces string, allPods, once bool, options dashboard.Options) error {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	rules.ExplicitPath = kubeconfig
 	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{CurrentContext: kubeCtx})
@@ -105,7 +92,11 @@ func run(ctx context.Context, user, arguments, kubeconfig, kubeCtx, namespaces s
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	w, err := dashboard.Start(ctx, clients, config, split(namespaces), allPods)
+	settings, err := load(ctx, clients, arguments, configMap)
+	if err != nil {
+		return err
+	}
+	w, err := dashboard.Start(ctx, clients, settings, split(namespaces), allPods)
 	if err != nil {
 		return err
 	}
@@ -115,6 +106,7 @@ func run(ctx context.Context, user, arguments, kubeconfig, kubeCtx, namespaces s
 	lines := func(width int) []string {
 		o := options
 		o.Width, o.Now = width, time.Now()
+		config, _ := settings.Config()
 		return dashboard.Render(dashboard.Compute(config, user, w.Data()), o)
 	}
 	if once {
@@ -126,6 +118,25 @@ func run(ctx context.Context, user, arguments, kubeconfig, kubeCtx, namespaces s
 	_, noColor := os.LookupEnv("NO_COLOR")
 	options.Color = !noColor && os.Getenv("TERM") != "dumb"
 	return screen(ctx, w.Changed(), lines)
+}
+
+func load(ctx context.Context, clients dashboard.Clients, arguments, configMap string) (*dashboard.Settings, error) {
+	if configMap != "" {
+		namespace, name, ok := strings.Cut(configMap, "/")
+		if !ok || namespace == "" || name == "" {
+			return nil, fmt.Errorf("-configmap: %q is not namespace/name", configMap)
+		}
+		return dashboard.WatchSettings(ctx, clients.Kube, namespace, name)
+	}
+	text, err := os.ReadFile(arguments)
+	if err != nil {
+		return nil, err
+	}
+	config, err := dashboard.ParseSettings(text)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", arguments, err)
+	}
+	return dashboard.FixedSettings(config), nil
 }
 
 // split lists namespaces once each, as pods would otherwise count twice.

@@ -35,9 +35,9 @@ type Class int
 const (
 	// Other jobs are ignored.
 	Other Class = iota
-	// Budgeted jobs use their owner's budget and are held when it is exhausted.
+	// Budgeted jobs use their user's budget and are held when it is exhausted.
 	Budgeted
-	// Charged jobs use their owner's budget but are never held.
+	// Charged jobs use their user's budget but are never held.
 	Charged
 	// Promotable jobs may be promoted into unused budget or demoted to excess.
 	Promotable
@@ -49,12 +49,12 @@ type LargeJobRule string
 const (
 	// LargeExcess always ranks it as excess.
 	LargeExcess LargeJobRule = "excess"
-	// LargeNormalIfFirst ranks it as normal if nothing of its owner's is ahead of
+	// LargeNormalIfFirst ranks it as normal if nothing of its user's is ahead of
 	// it in the allowance.
 	LargeNormalIfFirst LargeJobRule = "normal-if-first"
 )
 
-// Policy holds the parameters of the rules. Limits apply to each owner.
+// Policy holds the parameters of the rules. Limits apply to each user.
 type Policy struct {
 	// Budget limits budgeted and charged jobs together.
 	Budget Units
@@ -68,7 +68,7 @@ type Policy struct {
 // Job is one PodGroup.
 type Job struct {
 	ID       string
-	Owner    string
+	User     string
 	Class    Class
 	Units    Units
 	Priority int32 // before any change
@@ -103,27 +103,27 @@ type Result struct {
 // order of jobs does not matter.
 func Assign(p Policy, jobs []Job) map[string]Result {
 	results := make(map[string]Result, len(jobs))
-	owners := map[string][]*Job{}
+	users := map[string][]*Job{}
 	for i := range jobs {
 		j := &jobs[i]
 		results[j.ID] = Result{Tier: Unmanaged, Priority: j.Priority}
 		// Jobs without GPUs use no budget or allowance.
 		if j.Class != Other && j.Units > 0 {
-			owners[j.Owner] = append(owners[j.Owner], j)
+			users[j.User] = append(users[j.User], j)
 		}
 	}
-	for owner, owned := range owners {
-		if owner == "" {
-			p.assignUnowned(owned, results)
+	for user, owned := range users {
+		if user == "" {
+			p.assignWithoutUser(owned, results)
 		} else {
-			p.assignOwner(owned, results)
+			p.assignUser(owned, results)
 		}
 	}
 	return results
 }
 
-// assignUnowned gives jobs without an owner no share of any budget or allowance.
-func (p Policy) assignUnowned(jobs []*Job, results map[string]Result) {
+// assignWithoutUser gives jobs without a user no share of any budget or allowance.
+func (p Policy) assignWithoutUser(jobs []*Job, results map[string]Result) {
 	for _, j := range jobs {
 		switch {
 		case j.Class == Promotable:
@@ -136,7 +136,7 @@ func (p Policy) assignUnowned(jobs []*Job, results map[string]Result) {
 	}
 }
 
-func (p Policy) assignOwner(jobs []*Job, results map[string]Result) {
+func (p Policy) assignUser(jobs []*Job, results map[string]Result) {
 	var used Units
 	var waiting, running, pending []*Job
 	for _, j := range jobs {

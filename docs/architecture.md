@@ -44,6 +44,7 @@ runs vary too much to compare them closely.
 ## Limits
 
 - Same budget for everyone.
+- A budget is per scheduler: with several KAI shards, each gives every user a whole budget. Not tested.
 - One KAI version at a time: it compiles against KAI's internals.
 - A stream of small budgeted jobs can delay a large one of the same user.
 - A gang can be left waiting if one of its pods finishes and another is evicted, as in stock KAI,

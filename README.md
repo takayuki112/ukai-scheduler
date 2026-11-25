@@ -96,7 +96,7 @@ team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
 ## Status
 
 **Not yet used in production.** Tested with KAI v0.18.9 on kind with fake GPUs, on arm64 and
-amd64. Not tested with real GPUs or other KAI versions. See [what is tested](docs/testing.md).
+amd64, with Kubernetes 1.32 to 1.37. Not tested with real GPUs or other KAI versions. See [what is tested](docs/testing.md).
 
 ## License
 

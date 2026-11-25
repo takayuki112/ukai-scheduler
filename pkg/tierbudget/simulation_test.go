@@ -57,7 +57,7 @@ func (s *simulation) arrive() {
 	job := &simJob{created: s.now}
 	job.testJob = testJob{
 		name: fmt.Sprintf("%s-%d", class, s.next), class: class,
-		owner: []string{"alice", "bob", "carol"}[s.r.Intn(3)], gpus: float64(1 + s.r.Intn(3)),
+		user: []string{"alice", "bob", "carol"}[s.r.Intn(3)], gpus: float64(1 + s.r.Intn(3)),
 	}
 	s.next++
 	for range 1 + s.r.Intn(2) { // a gang, if two
@@ -108,8 +108,8 @@ func (s *simulation) step() int {
 		info := find(s.t, ssn, job.name)
 		if job.class == "high" {
 			if u := p.usage(info); u.active {
-				used[job.owner] += u.whole()
-				newP1[job.owner] = newP1[job.owner] || !job.has(running) && !job.has(releasing)
+				used[job.user] += u.whole()
+				newP1[job.user] = newP1[job.user] || !job.has(running) && !job.has(releasing)
 			}
 		}
 		wasEvicted := false
@@ -140,9 +140,9 @@ func (s *simulation) step() int {
 			evicted = append(evicted, job)
 		}
 	}
-	for owner, u := range used {
+	for user, u := range used {
 		if u > s.budget {
-			s.t.Errorf("session %d: %s uses %s of %s", s.now, owner, u, s.budget)
+			s.t.Errorf("session %d: %s uses %s of %s", s.now, user, u, s.budget)
 		}
 	}
 	for _, job := range evicted {

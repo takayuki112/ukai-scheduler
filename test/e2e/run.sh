@@ -46,11 +46,11 @@ for _ in $(seq 30); do curl -sf localhost:18081/tiers >/dev/null && break; sleep
 curl -sSf localhost:18081/tiers >/dev/null
 while :; do curl -s localhost:18081/tiers localhost:18080/metrics >/dev/null || true; sleep 0.1; done & pids+=($!)
 
-submit() { # name owner class gpus [pods, as a gang]
+submit() { # name user class gpus [pods, as a gang]
   kubectl create -f - >/dev/null <<Y
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/owner: $2}, annotations: {kai.scheduler/batch-min-member: "${5:-1}"}}
+metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/user: $2}, annotations: {kai.scheduler/batch-min-member: "${5:-1}"}}
 spec:
   parallelism: ${5:-1}
   completions: ${5:-1}
@@ -81,24 +81,24 @@ expect() { # name phase: reached within 60 s, and kept for 8 s
 }
 
 cleanup
-echo "1. A P1 over its owner's budget is held, with a reason, while GPUs are free"
+echo "1. A P1 over its user's budget is held, with a reason, while GPUs are free"
 submit a1 alice high 2; expect a1 Running
 submit a2 alice high 1; expect a2 Pending
 events=$(kubectl get events -o jsonpath='{range .items[*]}{.message}{"\n"}{end}')
 grep -q 'user budget: needs 1 units, using 2 of 2' <<<"$events" || { echo "FAIL: no reason in events"; exit 1; }
 echo "  ok: reason is in the events"
-echo "2. Another owner is not affected"
+echo "2. Another user is not affected"
 submit b1 bob high 2; expect b1 Running
 echo "3. The held P1 starts when the budget frees up"
 kubectl delete job a1 >/dev/null; expect a2 Running
 
 cleanup
-echo "4. A promoted P2 is safe from another owner's P1"
+echo "4. A promoted P2 is safe from another user's P1"
 submit p alice mid 2; expect p Running
 submit f carol top 2; expect f Running
 submit b1 bob high 2; expect b1 Pending; expect p Running
 u=$(uid p)
-echo "5. Its owner's P1 demotes it and takes its place"
+echo "5. Its user's P1 demotes it and takes its place"
 kubectl delete job b1 >/dev/null
 submit a1 alice high 2; expect a1 Running; expect p Pending
 [ "$(uid p)" != "$u" ] || { echo "FAIL: p was not evicted"; exit 1; }
@@ -171,13 +171,13 @@ echo "  ok: gangs of 3 held, of 2 complete"
 
 echo "12. Metrics and the status endpoint agree with that"
 metrics=$(curl -sSf localhost:18080/metrics)
-tiers=$(curl -sSf 'localhost:18081/tiers?owner=alice')
+tiers=$(curl -sSf 'localhost:18081/tiers?user=alice')
 has() { grep -qF -- "$2" <<<"$1" || { echo "FAIL: no $2"; grep '^ukai' <<<"$metrics"; echo "$tiers"; exit 1; }; }
 has "$metrics" 'ukai_active{mode="enforce"} 1'
-has "$metrics" 'ukai_owner_budget_units 2'
-has "$metrics" 'ukai_units{owner="alice",state="running",tier="budget"} 2'
-has "$metrics" 'ukai_units{owner="alice",state="pending",tier="held"} 4'
-has "$metrics" 'ukai_jobs{owner="alice",state="pending",tier="held"} 2'
+has "$metrics" 'ukai_user_budget_units 2'
+has "$metrics" 'ukai_units{state="running",tier="budget",user="alice"} 2'
+has "$metrics" 'ukai_units{state="pending",tier="held",user="alice"} 4'
+has "$metrics" 'ukai_jobs{state="pending",tier="held",user="alice"} 2'
 has "$metrics" 'ukai_panics_total 0'
 has "$metrics" 'ukai_tier_changes_total{from="promoted",to="'
 has "$tiers" '"reason": "needs 3 units, budget is 2"'

@@ -16,4 +16,4 @@ spec:
   validations:
     - message: this priority class is restricted
       expression: >-
-        (has(object.metadata.labels) && 'example.com/owner' in object.metadata.labels ? object.metadata.labels['example.com/owner'] : '') in ['carol']
+        (has(object.metadata.labels) && 'example.com/user' in object.metadata.labels ? object.metadata.labels['example.com/user'] : '') in ['carol']

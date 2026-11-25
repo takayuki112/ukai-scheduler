@@ -29,13 +29,13 @@ import (
 )
 
 type job struct {
-	name, owner, class string
-	gpus               int64
-	node               string // if running
+	name, user, class string
+	gpus              int64
+	node              string // if running
 }
 
 var args = framework.PluginArguments{
-	"ownerLabel": "example.com/owner", "budgetedClasses": "high", "promotableClasses": "mid",
+	"userLabel": "example.com/user", "budgetedClasses": "high", "promotableClasses": "mid",
 	"budget": "2", "allowance": "2", "promotedPriority": "75", "excessPriority": "45",
 }
 
@@ -75,7 +75,7 @@ func build(t *testing.T, nodes map[string]int64, jobs []job) *snapshot.Snapshot 
 		pg := &enginev2alpha2.PodGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: j.name, Namespace: "ns", UID: types.UID("pg-" + j.name), CreationTimestamp: created,
-				Labels: map[string]string{"example.com/owner": j.owner}, Annotations: map[string]string{},
+				Labels: map[string]string{"example.com/user": j.user}, Annotations: map[string]string{},
 			},
 			Spec: enginev2alpha2.PodGroupSpec{MinMember: ptr.To[int32](1), Queue: "q", PriorityClassName: j.class},
 		}

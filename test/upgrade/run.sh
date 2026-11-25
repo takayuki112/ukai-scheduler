@@ -40,11 +40,11 @@ configured() { # text yes|no
   done
   fail "configuration: $1, want $2"
 }
-submit() { # name owner class gpus
+submit() { # name user class gpus
   kubectl create -f - >/dev/null <<Y
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/owner: $2}}
+metadata: {name: $1, labels: {ukai-test: "1", kai.scheduler/queue: default-queue, example.com/user: $2}}
 spec:
   template:
     metadata: {labels: {ukai-test: "1", kai.scheduler/queue: default-queue}}

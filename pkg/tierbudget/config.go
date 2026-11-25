@@ -19,12 +19,12 @@ import (
 // Plugin arguments. Those without a default are required.
 const (
 	argMode             = "mode"              // audit (default) or enforce
-	argOwnerLabel       = "ownerLabel"        // PodGroup label naming a job's owner
+	argUserLabel        = "userLabel"         // PodGroup label naming a job's user
 	argBudgeted         = "budgetedClasses"   // comma-separated priority classes
 	argCharged          = "chargedClasses"    // default: none
 	argPromotable       = "promotableClasses" // default: none
-	argBudget           = "budget"            // units per owner
-	argAllowance        = "allowance"         // units per owner; required with promotableClasses
+	argBudget           = "budget"            // units per user
+	argAllowance        = "allowance"         // units per user; required with promotableClasses
 	argPromotedPriority = "promotedPriority"  // required with promotableClasses
 	argExcessPriority   = "excessPriority"    // required with promotableClasses
 	argLargeJobs        = "largeJobs"         // excess (default) or normal-if-first
@@ -37,7 +37,7 @@ const (
 )
 
 var knownArgs = []string{
-	argMode, argOwnerLabel, argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
+	argMode, argUserLabel, argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
 	argPromotedPriority, argExcessPriority, argLargeJobs, argGPUTypeLabel, argGPUWeights, argDefaultWeight,
 	argConsolidation, argProtected, argJobMetrics,
 }
@@ -57,7 +57,7 @@ const maxUnits = 1e9
 // Config is the parsed plugin arguments.
 type Config struct {
 	Mode          Mode
-	OwnerLabel    string
+	UserLabel     string
 	Classes       map[string]tiers.Class // by priority class name
 	Policy        tiers.Policy
 	GPUTypeLabel  string
@@ -81,7 +81,7 @@ func ParseConfig(args framework.PluginArguments) (*Config, error) {
 	}
 	c := &Config{
 		Mode:         Mode(p.oneOf(argMode, string(Audit), string(Enforce))),
-		OwnerLabel:   p.required(argOwnerLabel),
+		UserLabel:    p.required(argUserLabel),
 		Classes:      map[string]tiers.Class{},
 		GPUTypeLabel: p.get(argGPUTypeLabel),
 		GPUWeights:   p.weights(),

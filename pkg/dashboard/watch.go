@@ -19,8 +19,6 @@ import (
 	kaiclient "github.com/kai-scheduler/KAI-scheduler/pkg/apis/client/clientset/versioned"
 	enginev2alpha2 "github.com/kai-scheduler/KAI-scheduler/pkg/apis/scheduling/v2alpha2"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
-
-	"github.com/takayuki112/ukai-scheduler/pkg/tierbudget"
 )
 
 // Clients are the API, as the user.
@@ -32,7 +30,7 @@ type Clients struct {
 
 // Watcher follows the API with watches.
 type Watcher struct {
-	config     *tierbudget.Config
+	settings   *Settings
 	namespaces []string
 	allPods    bool
 	changed    chan struct{}
@@ -50,11 +48,12 @@ type Watcher struct {
 // Start asks what may be listed, and watches that: PodGroups of all namespaces if
 // allowed, or else of the given ones; pods of the given ones, or with allPods of all if
 // allowed; and the labels of nodes if allowed.
-func Start(ctx context.Context, clients Clients, config *tierbudget.Config, namespaces []string, allPods bool) (*Watcher, error) {
+func Start(ctx context.Context, clients Clients, settings *Settings, namespaces []string, allPods bool) (*Watcher, error) {
 	w := &Watcher{
-		config: config, namespaces: namespaces, changed: make(chan struct{}, 1),
+		settings: settings, namespaces: namespaces, changed: make(chan struct{}, 1),
 		seesPods: map[string]bool{}, lost: map[string]string{}, former: map[string]Group{},
 	}
+	settings.onChange(w.notify)
 	groups := func(ns string) lister {
 		c := clients.KAI.SchedulingV2alpha2().PodGroups(ns)
 		return lister{
@@ -83,7 +82,7 @@ func Start(ctx context.Context, clients Clients, config *tierbudget.Config, name
 			w.notes = append(w.notes, "You may not list PodGroups in "+ns+".")
 			continue
 		}
-		w.groups = append(w.groups, w.informer("PodGroups", groups(ns), &enginev2alpha2.PodGroup{}, nil))
+		w.groups = append(w.groups, w.informer(place("PodGroups", ns), groups(ns), &enginev2alpha2.PodGroup{}, nil))
 	}
 
 	scope = namespaces
@@ -106,7 +105,7 @@ func Start(ctx context.Context, clients Clients, config *tierbudget.Config, name
 			continue
 		}
 		w.seesPods[ns] = true
-		w.pods = append(w.pods, w.informer("pods", pods(ns), &v1.Pod{}, stripPod))
+		w.pods = append(w.pods, w.informer(place("pods", ns), pods(ns), &v1.Pod{}, stripPod))
 	}
 	nodeLister := lister{
 		func(ctx context.Context, o metav1.ListOptions) (runtime.Object, error) { return nodes.List(ctx, o) }, nodes.Watch}
@@ -156,12 +155,16 @@ func (w *Watcher) Data() Data {
 			d.GPUMemory[n.Name] = parseGPUMemory(n.Labels[constants.NvidiaGpuMemory])
 		}
 	}
+	config, problem := w.settings.Config()
+	if problem != "" {
+		d.Notes = append(slices.Clone(d.Notes), "The settings may be out of date: "+problem)
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	// Remember PodGroups for as long as they have pods.
 	former := map[string]Group{}
 	for _, g := range d.Groups {
-		former[g.Namespace+"/"+g.Name] = Group{UserOf(w.config, g.Labels), g.Spec.PriorityClassName}
+		former[g.Namespace+"/"+g.Name] = Group{UserOf(config, g.Labels), g.Spec.PriorityClassName}
 	}
 	for _, p := range d.Pods {
 		id := p.Namespace + "/" + p.Annotations[constants.PodGroupAnnotationForPod]
@@ -197,6 +200,13 @@ func (w *Watcher) connection(what string, err error) {
 	if !same {
 		w.notify()
 	}
+}
+
+func place(what, namespace string) string {
+	if namespace == "" {
+		return what
+	}
+	return what + " in " + namespace
 }
 
 type lister struct {

@@ -38,12 +38,12 @@ func get(t *testing.T, path string) (Status, string) {
 
 func TestStatus(t *testing.T) {
 	want := map[string]JobStatus{
-		"run":      {Owner: "alice", Class: "high", Running: true, Units: 1, Tier: tiers.Budget, Priority: 75, ClassPriority: 75},
-		"held":     {Owner: "alice", Class: "high", Units: 2, Tier: tiers.Held, Priority: 75, ClassPriority: 75, Reason: "needs 2 units, using 1 of 2"},
-		"promoted": {Owner: "alice", Class: "mid", Running: true, Units: 1, Tier: tiers.Promoted, Priority: 75, ClassPriority: 50},
-		"normal":   {Owner: "alice", Class: "mid", Units: 4, Tier: tiers.Normal, Priority: 50, ClassPriority: 50},
-		"excess":   {Owner: "bob", Class: "mid", Running: true, Units: 8, Tier: tiers.Excess, Priority: 45, ClassPriority: 50},
-		"waits":    {Owner: "bob", Class: "high", Units: 0.5, Tier: tiers.Budget, Priority: 75, ClassPriority: 75},
+		"run":      {User: "alice", Class: "high", Running: true, Units: 1, Tier: tiers.Budget, Priority: 75, ClassPriority: 75},
+		"held":     {User: "alice", Class: "high", Units: 2, Tier: tiers.Held, Priority: 75, ClassPriority: 75, Reason: "needs 2 units, using 1 of 2"},
+		"promoted": {User: "alice", Class: "mid", Running: true, Units: 1, Tier: tiers.Promoted, Priority: 75, ClassPriority: 50},
+		"normal":   {User: "alice", Class: "mid", Units: 4, Tier: tiers.Normal, Priority: 50, ClassPriority: 50},
+		"excess":   {User: "bob", Class: "mid", Running: true, Units: 8, Tier: tiers.Excess, Priority: 45, ClassPriority: 50},
+		"waits":    {User: "bob", Class: "high", Units: 0.5, Tier: tiers.Budget, Priority: 75, ClassPriority: 75},
 	}
 	for _, mode := range []string{"audit", "enforce"} {
 		args := testArgs("2")
@@ -63,10 +63,10 @@ func TestStatus(t *testing.T) {
 				t.Errorf("%s: got %+v, want %+v", mode, job, want[job.Name])
 			}
 		}
-		if bob, _ := get(t, StatusPath+"?owner=bob"); len(bob.Jobs) != 2 || bob.Jobs[0].Owner != "bob" {
+		if bob, _ := get(t, StatusPath+"?user=bob"); len(bob.Jobs) != 2 || bob.Jobs[0].User != "bob" {
 			t.Errorf("bob: %+v", bob.Jobs)
 		}
-		if _, body := get(t, StatusPath+"?owner=nobody"); !strings.Contains(body, `"jobs": []`) {
+		if _, body := get(t, StatusPath+"?user=nobody"); !strings.Contains(body, `"jobs": []`) {
 			t.Errorf("nobody: %s", body)
 		}
 	}
@@ -82,35 +82,35 @@ func TestMetrics(t *testing.T) {
 # HELP ukai_active 1 if the plugin works, 0 if stock behaviour applies because of an error
 # TYPE ukai_active gauge
 ukai_active{mode="enforce"} 1
-# HELP ukai_owner_budget_units Budget of each user
-# TYPE ukai_owner_budget_units gauge
-ukai_owner_budget_units 2
+# HELP ukai_user_budget_units Budget of each user
+# TYPE ukai_user_budget_units gauge
+ukai_user_budget_units 2
 # HELP ukai_jobs Jobs by effective tier
 # TYPE ukai_jobs gauge
-ukai_jobs{owner="alice",state="pending",tier="held"} 1
-ukai_jobs{owner="alice",state="pending",tier="normal"} 1
-ukai_jobs{owner="alice",state="running",tier="budget"} 1
-ukai_jobs{owner="alice",state="running",tier="promoted"} 1
-ukai_jobs{owner="bob",state="pending",tier="budget"} 1
-ukai_jobs{owner="bob",state="running",tier="excess"} 1
+ukai_jobs{state="pending",tier="held",user="alice"} 1
+ukai_jobs{state="pending",tier="normal",user="alice"} 1
+ukai_jobs{state="running",tier="budget",user="alice"} 1
+ukai_jobs{state="running",tier="promoted",user="alice"} 1
+ukai_jobs{state="pending",tier="budget",user="bob"} 1
+ukai_jobs{state="running",tier="excess",user="bob"} 1
 # HELP ukai_units Units of jobs by effective tier
 # TYPE ukai_units gauge
-ukai_units{owner="alice",state="pending",tier="held"} 2
-ukai_units{owner="alice",state="pending",tier="normal"} 4
-ukai_units{owner="alice",state="running",tier="budget"} 1
-ukai_units{owner="alice",state="running",tier="promoted"} 1
-ukai_units{owner="bob",state="pending",tier="budget"} 0.5
-ukai_units{owner="bob",state="running",tier="excess"} 8
+ukai_units{state="pending",tier="held",user="alice"} 2
+ukai_units{state="pending",tier="normal",user="alice"} 4
+ukai_units{state="running",tier="budget",user="alice"} 1
+ukai_units{state="running",tier="promoted",user="alice"} 1
+ukai_units{state="pending",tier="budget",user="bob"} 0.5
+ukai_units{state="running",tier="excess",user="bob"} 8
 # HELP ukai_job_priority Effective priority of each job
 # TYPE ukai_job_priority gauge
-ukai_job_priority{namespace="NS",owner="alice",podgroup="held",tier="held"} 75
-ukai_job_priority{namespace="NS",owner="alice",podgroup="normal",tier="normal"} 50
-ukai_job_priority{namespace="NS",owner="alice",podgroup="promoted",tier="promoted"} 75
-ukai_job_priority{namespace="NS",owner="alice",podgroup="run",tier="budget"} 75
-ukai_job_priority{namespace="NS",owner="bob",podgroup="excess",tier="excess"} 45
-ukai_job_priority{namespace="NS",owner="bob",podgroup="waits",tier="budget"} 75
+ukai_job_priority{namespace="NS",user="alice",podgroup="held",tier="held"} 75
+ukai_job_priority{namespace="NS",user="alice",podgroup="normal",tier="normal"} 50
+ukai_job_priority{namespace="NS",user="alice",podgroup="promoted",tier="promoted"} 75
+ukai_job_priority{namespace="NS",user="alice",podgroup="run",tier="budget"} 75
+ukai_job_priority{namespace="NS",user="bob",podgroup="excess",tier="excess"} 45
+ukai_job_priority{namespace="NS",user="bob",podgroup="waits",tier="budget"} 75
 `
-	names := []string{"ukai_active", "ukai_owner_budget_units", "ukai_jobs", "ukai_units", "ukai_job_priority"}
+	names := []string{"ukai_active", "ukai_user_budget_units", "ukai_jobs", "ukai_units", "ukai_job_priority"}
 	if err := testutil.CollectAndCompare(collector{}, strings.NewReader(strings.ReplaceAll(want, "NS", ns)), names...); err != nil {
 		t.Error(err)
 	}
@@ -165,7 +165,7 @@ func TestStatusOfFailures(t *testing.T) {
 		if !strings.Contains(s.Error, text) || len(s.Jobs) != 0 {
 			t.Errorf("%+v", s)
 		}
-		if n := testutil.CollectAndCount(collector{}, "ukai_jobs", "ukai_owner_budget_units"); n != 0 {
+		if n := testutil.CollectAndCount(collector{}, "ukai_jobs", "ukai_user_budget_units"); n != 0 {
 			t.Errorf("%d series", n)
 		}
 	}
@@ -215,7 +215,7 @@ func TestReadDuringSessions(t *testing.T) {
 					return
 				default:
 					testutil.CollectAndCount(collector{})
-					serveStatus(httptest.NewRecorder(), httptest.NewRequest("GET", StatusPath+"?owner=bob", nil))
+					serveStatus(httptest.NewRecorder(), httptest.NewRequest("GET", StatusPath+"?user=bob", nil))
 				}
 			}
 		})

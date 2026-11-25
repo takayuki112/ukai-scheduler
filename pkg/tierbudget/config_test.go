@@ -13,7 +13,7 @@ import (
 
 func validArgs() framework.PluginArguments {
 	return framework.PluginArguments{
-		"mode": "enforce", "ownerLabel": "example.com/owner",
+		"mode": "enforce", "userLabel": "example.com/user",
 		"budgetedClasses": "high", "chargedClasses": "workspace", "promotableClasses": "mid, mid-alt",
 		"budget": "4", "allowance": "4.5", "promotedPriority": "75", "excessPriority": "45", "largeJobs": "normal-if-first",
 		"gpuTypeLabel": "gpu-type", "gpuWeights": "small=1, big = 2.5", "defaultGPUWeight": "4",
@@ -27,7 +27,7 @@ func TestParseConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Config{
-		Mode: Enforce, OwnerLabel: "example.com/owner",
+		Mode: Enforce, UserLabel: "example.com/user",
 		Classes:      map[string]tiers.Class{"high": tiers.Budgeted, "workspace": tiers.Charged, "mid": tiers.Promotable, "mid-alt": tiers.Promotable},
 		Policy:       tiers.Policy{Budget: 4000, Allowance: 4500, PromotedPriority: 75, ExcessPriority: 45, LargeJobs: tiers.LargeNormalIfFirst},
 		GPUTypeLabel: "gpu-type", GPUWeights: map[string]float64{"small": 1, "big": 2.5}, DefaultWeight: 4, ProtectedPriority: 75,
@@ -39,7 +39,7 @@ func TestParseConfig(t *testing.T) {
 }
 
 func TestParseConfigDefaults(t *testing.T) {
-	c, err := ParseConfig(framework.PluginArguments{"ownerLabel": "o", "budgetedClasses": "high", "budget": "4", "protectedPriority": "75"})
+	c, err := ParseConfig(framework.PluginArguments{"userLabel": "o", "budgetedClasses": "high", "budget": "4", "protectedPriority": "75"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestParseConfigDefaults(t *testing.T) {
 func TestParseConfigErrors(t *testing.T) {
 	for _, tc := range []struct{ key, value, want string }{
 		{"mode", "on", "mode: "},
-		{"ownerLabel", "", "ownerLabel: required"},
+		{"userLabel", "", "userLabel: required"},
 		{"budgetedClasses", " ", "budgetedClasses: required"},
 		{"budgetedClasses", "high,,x", "empty item"},
 		{"chargedClasses", "high", "more than once"},
@@ -78,6 +78,7 @@ func TestParseConfigErrors(t *testing.T) {
 		{"consolidation", "high>@normal", "unknown group"},
 		{"protectedPriority", "x", "protectedPriority: "},
 		{"budgett", "4", "budgett: unknown"},
+		{"ownerLabel", "x", "ownerLabel: unknown"},
 	} {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
 			args := maps.Clone(validArgs())
@@ -97,7 +98,7 @@ func TestProtectedPriority(t *testing.T) {
 		t.Errorf("got %v, %v", c, err)
 	}
 	// Nothing to default to, and no passes that say what may move.
-	_, err := ParseConfig(framework.PluginArguments{"ownerLabel": "o", "budgetedClasses": "high", "budget": "4"})
+	_, err := ParseConfig(framework.PluginArguments{"userLabel": "o", "budgetedClasses": "high", "budget": "4"})
 	if err == nil || !strings.Contains(err.Error(), "protectedPriority: required") {
 		t.Errorf("got %v", err)
 	}
@@ -105,7 +106,7 @@ func TestProtectedPriority(t *testing.T) {
 
 func TestParseConfigReportsAllErrors(t *testing.T) {
 	_, err := ParseConfig(framework.PluginArguments{"mode": "x", "zzz": "1"})
-	for _, want := range []string{"mode", "zzz", "ownerLabel", "budgetedClasses", "budget"} {
+	for _, want := range []string{"mode", "zzz", "userLabel", "budgetedClasses", "budget"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%v lacks %q", err, want)
 		}

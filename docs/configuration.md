@@ -10,7 +10,7 @@ scheduler:
       priority: 50
       arguments:
         mode: audit
-        ownerLabel: example.com/owner
+        userLabel: example.com/user
         budgetedClasses: high
         promotableClasses: mid
         budget: "4"
@@ -28,7 +28,7 @@ scheduler restarts. An error in any of them disables the plugin, and the log say
 | Argument | Default | Meaning |
 |---|---|---|
 | `mode` | `audit` | `audit` only logs decisions; `enforce` applies them |
-| `ownerLabel` | required | Label whose value is the job's user |
+| `userLabel` | required | Label whose value is the job's user |
 | `budgetedClasses` | required | Comma-separated classes that run up to the budget, then wait (P1) |
 | `chargedClasses` | none | Classes that use the budget, but never wait for it |
 | `promotableClasses` | none | Classes that may be promoted, or become excess (P2) |

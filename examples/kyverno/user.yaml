@@ -1,6 +1,6 @@
 # Sets the label that names the user to the Kubernetes username of who submits, on the workload and on its pods, so that
 # nobody can use another's budget. Adapt:
-# - example.com/owner, here and in the plugin's ownerLabel
+# - example.com/user, here and in the plugin's userLabel
 # - the kinds: add every custom workload type that users may submit, with the path to its
 #   pod template, or they can set the label there
 # Service accounts are trusted, as controllers create pods with them. If users can use
@@ -8,7 +8,7 @@
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: set-owner
+  name: set-user
   annotations: {pod-policies.kyverno.io/autogen-controllers: none}
 spec:
   background: false
@@ -24,7 +24,7 @@ spec:
         patchStrategicMerge:
           metadata: &owned
             labels:
-              example.com/owner: "{{ replace_all(request.userInfo.username, '@', '-at-') }}"
+              example.com/user: "{{ replace_all(request.userInfo.username, '@', '-at-') }}"
     - name: workloads
       match:
         any:
@@ -54,7 +54,7 @@ spec:
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: keep-owner
+  name: keep-user
   annotations: {pod-policies.kyverno.io/autogen-controllers: none}
 spec:
   background: false
@@ -72,9 +72,9 @@ spec:
         deny:
           conditions:
             any:
-              - key: "{{ request.object.metadata.labels.\"example.com/owner\" || '' }}"
+              - key: "{{ request.object.metadata.labels.\"example.com/user\" || '' }}"
                 operator: NotEquals
-                value: "{{ request.oldObject.metadata.labels.\"example.com/owner\" || '' }}"
+                value: "{{ request.oldObject.metadata.labels.\"example.com/user\" || '' }}"
     - name: in-the-template
       match:
         any:
@@ -86,9 +86,9 @@ spec:
         deny:
           conditions:
             any:
-              - key: "{{ request.object.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+              - key: "{{ request.object.spec.template.metadata.labels.\"example.com/user\" || '' }}"
                 operator: NotEquals
-                value: "{{ request.oldObject.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+                value: "{{ request.oldObject.spec.template.metadata.labels.\"example.com/user\" || '' }}"
     - name: in-the-cronjob
       match:
         any:
@@ -100,9 +100,9 @@ spec:
         deny:
           conditions:
             any:
-              - key: "{{ request.object.spec.jobTemplate.metadata.labels.\"example.com/owner\" || '' }}"
+              - key: "{{ request.object.spec.jobTemplate.metadata.labels.\"example.com/user\" || '' }}"
                 operator: NotEquals
-                value: "{{ request.oldObject.spec.jobTemplate.metadata.labels.\"example.com/owner\" || '' }}"
-              - key: "{{ request.object.spec.jobTemplate.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+                value: "{{ request.oldObject.spec.jobTemplate.metadata.labels.\"example.com/user\" || '' }}"
+              - key: "{{ request.object.spec.jobTemplate.spec.template.metadata.labels.\"example.com/user\" || '' }}"
                 operator: NotEquals
-                value: "{{ request.oldObject.spec.jobTemplate.spec.template.metadata.labels.\"example.com/owner\" || '' }}"
+                value: "{{ request.oldObject.spec.jobTemplate.spec.template.metadata.labels.\"example.com/user\" || '' }}"

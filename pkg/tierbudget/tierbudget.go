@@ -1,4 +1,4 @@
-// Package tierbudget is a KAI scheduler plugin that limits how much each owner can
+// Package tierbudget is a KAI scheduler plugin that limits how much each user can
 // run at a budgeted priority, and moves other running jobs up or down depending on
 // how much of that budget is free.
 //
@@ -38,7 +38,7 @@ var (
 // and class have to do.
 var lastGroups atomic.Pointer[map[common_info.PodGroupID]group]
 
-type group struct{ owner, className string }
+type group struct{ user, className string }
 
 type plugin struct {
 	config *Config // nil if invalid
@@ -47,7 +47,7 @@ type plugin struct {
 	jobs   map[common_info.PodGroupID]*jobState
 	// results is set once they apply to the session.
 	results map[string]tiers.Result
-	// charged lists each owner's jobs that count against the budget.
+	// charged lists each user's jobs that count against the budget.
 	charged map[string][]*jobState
 	// orphans are pods without a PodGroup, by its former ID.
 	orphans map[common_info.PodGroupID]*orphan
@@ -56,7 +56,7 @@ type plugin struct {
 type jobState struct {
 	info  *podgroup_info.PodGroupInfo
 	class tiers.Class
-	owner string
+	user  string
 	// units is the charge for the whole job when the session opened.
 	units tiers.Units
 	// running is whether it held resources when the session opened.
@@ -69,7 +69,7 @@ type jobState struct {
 type orphan struct {
 	class     tiers.Class
 	className string
-	owner     string
+	user      string
 	priority  int32
 	units     tiers.Units
 	created   time.Time
@@ -149,13 +149,13 @@ func (p *plugin) collect() {
 		state := &jobState{
 			info:    info,
 			class:   class,
-			owner:   info.PodGroup.Labels[p.config.OwnerLabel],
+			user:    info.PodGroup.Labels[p.config.UserLabel],
 			units:   u.whole(),
 			running: u.active,
 		}
 		p.jobs[id] = state
 		if class == tiers.Budgeted || class == tiers.Charged {
-			p.charged[state.owner] = append(p.charged[state.owner], state)
+			p.charged[state.user] = append(p.charged[state.user], state)
 		}
 	}
 	p.collectOrphans()
@@ -165,7 +165,7 @@ func (p *plugin) collectOrphans() {
 	known := map[common_info.PodGroupID]group{}
 	for id, info := range p.ssn.ClusterInfo.PodGroupInfos {
 		if info != nil && info.PodGroup != nil {
-			known[id] = group{info.PodGroup.Labels[p.config.OwnerLabel], info.PodGroup.Spec.PriorityClassName}
+			known[id] = group{info.PodGroup.Labels[p.config.UserLabel], info.PodGroup.Spec.PriorityClassName}
 		}
 	}
 	var before map[common_info.PodGroupID]group
@@ -181,7 +181,7 @@ func (p *plugin) collectOrphans() {
 			}
 			g, ok := before[task.Job]
 			if !ok {
-				g = group{task.Pod.Labels[p.config.OwnerLabel], task.Pod.Spec.PriorityClassName}
+				g = group{task.Pod.Labels[p.config.UserLabel], task.Pod.Spec.PriorityClassName}
 			}
 			known[task.Job] = g
 			class := p.config.Classes[g.className]
@@ -190,7 +190,7 @@ func (p *plugin) collectOrphans() {
 			}
 			o := p.orphans[task.Job]
 			if o == nil {
-				o = &orphan{class: class, className: g.className, owner: g.owner, created: task.Pod.CreationTimestamp.Time}
+				o = &orphan{class: class, className: g.className, user: g.user, created: task.Pod.CreationTimestamp.Time}
 				if task.Pod.Spec.Priority != nil {
 					o.priority = *task.Pod.Spec.Priority
 				}
@@ -206,7 +206,7 @@ func (p *plugin) tierJobs() []tiers.Job {
 	jobs := make([]tiers.Job, 0, len(p.jobs))
 	for id, s := range p.jobs {
 		j := tiers.Job{
-			ID: string(id), Owner: s.owner, Class: s.class, Units: s.units,
+			ID: string(id), User: s.user, Class: s.class, Units: s.units,
 			Priority: s.info.Priority, Running: s.running, Created: s.info.CreationTimestamp.Time,
 		}
 		// KAI records the start in whole seconds, and not for jobs it did not start.
@@ -218,7 +218,7 @@ func (p *plugin) tierJobs() []tiers.Job {
 	}
 	for id, o := range p.orphans {
 		jobs = append(jobs, tiers.Job{
-			ID: string(id), Owner: o.owner, Class: o.class, Units: o.units,
+			ID: string(id), User: o.user, Class: o.class, Units: o.units,
 			Priority: o.priority, Running: true, Created: o.created, Started: o.created,
 		})
 	}
@@ -284,14 +284,14 @@ func (p *plugin) hold(task *pod_info.PodInfo) string {
 	if need == 0 || p.taskUnits(task) == 0 {
 		return ""
 	}
-	if job.owner == "" {
+	if job.user == "" {
 		if job.running {
 			return ""
 		}
-		return fmt.Sprintf("no user: label %s is not set", p.config.OwnerLabel)
+		return fmt.Sprintf("no user: label %s is not set", p.config.UserLabel)
 	}
 	var used tiers.Units
-	for _, other := range p.charged[job.owner] {
+	for _, other := range p.charged[job.user] {
 		if other != job {
 			if o := p.usage(other.info); o.active {
 				used += o.whole()
@@ -299,7 +299,7 @@ func (p *plugin) hold(task *pod_info.PodInfo) string {
 		}
 	}
 	for _, o := range p.orphans {
-		if o.owner == job.owner && o.class != tiers.Promotable {
+		if o.user == job.user && o.class != tiers.Promotable {
 			used += o.units
 		}
 	}
@@ -317,7 +317,7 @@ func (p *plugin) prePredicate(task *pod_info.PodInfo, _ *podgroup_info.PodGroupI
 // victimInvariantPrePredicate stops KAI from looking for victims for a held job.
 // Budgeted jobs do not evict each other to get within budget, and an evicted one
 // counts until it is gone, so no choice of victims would help. It also keeps KAI from
-// concluding that similar jobs of other owners cannot be placed either.
+// concluding that similar jobs of other users cannot be placed either.
 func (p *plugin) victimInvariantPrePredicate(task *pod_info.PodInfo) (failure *api.VictimInvariantPrePredicateFailure) {
 	defer recoverTo("checking a task", func() { failure = nil })
 	if reason := p.hold(task); reason != "" {
@@ -335,13 +335,13 @@ func (p *plugin) report(results map[string]tiers.Result) {
 		current[id] = fmt.Sprintf("%s (priority %d) %s", r.Tier, r.Priority, r.Reason)
 	}
 	for id, text := range tierLog.replace(current) {
-		var owner string
+		var user string
 		if job := p.jobs[common_info.PodGroupID(id)]; job != nil {
-			owner = job.owner
+			user = job.user
 		} else if o := p.orphans[common_info.PodGroupID(id)]; o != nil {
-			owner, text = o.owner, text+" (its PodGroup is gone)"
+			user, text = o.user, text+" (its PodGroup is gone)"
 		}
-		log.InfraLogger.Infof("Plugin %s (%s): job %s of user %q is %s", Name, p.config.Mode, id, owner, text)
+		log.InfraLogger.Infof("Plugin %s (%s): job %s of user %q is %s", Name, p.config.Mode, id, user, text)
 	}
 }
 

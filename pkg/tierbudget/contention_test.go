@@ -55,16 +55,16 @@ func contention(t *testing.T, nodes map[string]int, budget, ends int, jobs []tes
 				}
 				jobs[i].pods, jobs[i].nodes = []pod_status.PodStatus{running}, at
 				order = append(order, job.name)
-				used[job.owner] += job.gpus
+				used[job.user] += job.gpus
 			case s == "running":
-				used[job.owner] += job.gpus
+				used[job.user] += job.gpus
 			case s != "pending":
 				t.Fatalf("%s is %s: a P1 must not evict another", job.name, s)
 			}
 		}
-		for owner, u := range used {
+		for user, u := range used {
 			if u > float64(budget) {
-				t.Errorf("%s uses %v", owner, u)
+				t.Errorf("%s uses %v", user, u)
 			}
 		}
 		p.OnSessionClose(ssn)

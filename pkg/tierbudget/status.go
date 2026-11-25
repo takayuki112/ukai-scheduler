@@ -35,7 +35,7 @@ type Status struct {
 type JobStatus struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
-	Owner     string `json:"owner"`
+	User      string `json:"user"`
 	Class     string `json:"class"`
 	Running   bool   `json:"running"`
 	// Orphan is set if pods are left but the PodGroup is gone.
@@ -79,7 +79,7 @@ func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 			continue
 		}
 		s.Jobs = append(s.Jobs, JobStatus{
-			Namespace: job.info.Namespace, Name: job.info.Name, Owner: job.owner,
+			Namespace: job.info.Namespace, Name: job.info.Name, User: job.user,
 			Class: job.info.PodGroup.Spec.PriorityClassName, Running: job.running, Units: job.units.Float(),
 			Tier: r.Tier, Priority: r.Priority, ClassPriority: job.info.Priority, Reason: r.Reason,
 		})
@@ -91,12 +91,12 @@ func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 		}
 		namespace, name, _ := strings.Cut(string(id), "/")
 		s.Jobs = append(s.Jobs, JobStatus{
-			Namespace: namespace, Name: name, Owner: o.owner, Class: o.className, Running: true, Orphan: true,
+			Namespace: namespace, Name: name, User: o.user, Class: o.className, Running: true, Orphan: true,
 			Units: o.units.Float(), Tier: r.Tier, Priority: r.Priority, ClassPriority: o.priority,
 		})
 	}
 	slices.SortFunc(s.Jobs, func(a, b JobStatus) int {
-		return cmp.Or(cmp.Compare(a.Owner, b.Owner), cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))
+		return cmp.Or(cmp.Compare(a.User, b.User), cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))
 	})
 	return s
 }
@@ -127,7 +127,7 @@ func (p *plugin) publishError(text string) {
 	publish(s)
 }
 
-// serveStatus writes the status as JSON. The query may name an owner.
+// serveStatus writes the status as JSON. The query may name a user.
 func serveStatus(w http.ResponseWriter, r *http.Request) {
 	s := lastStatus.Load()
 	if s == nil {
@@ -135,10 +135,10 @@ func serveStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := *s
-	if q := r.URL.Query(); q.Has("owner") {
+	if q := r.URL.Query(); q.Has("user") {
 		out.Jobs = []JobStatus{}
 		for _, j := range s.Jobs {
-			if j.Owner == q.Get("owner") {
+			if j.User == q.Get("user") {
 				out.Jobs = append(out.Jobs, j)
 			}
 		}
@@ -154,11 +154,11 @@ var (
 		"1 if the plugin works, 0 if stock behaviour applies because of an error", []string{"mode"}, nil)
 	sessionDesc = prometheus.NewDesc("ukai_last_session_timestamp_seconds",
 		"When the last session opened", nil, nil)
-	budgetDesc = prometheus.NewDesc("ukai_owner_budget_units", "Budget of each user", nil, nil)
-	jobsDesc   = prometheus.NewDesc("ukai_jobs", "Jobs by effective tier", []string{"owner", "tier", "state"}, nil)
-	unitsDesc  = prometheus.NewDesc("ukai_units", "Units of jobs by effective tier", []string{"owner", "tier", "state"}, nil)
+	budgetDesc = prometheus.NewDesc("ukai_user_budget_units", "Budget of each user", nil, nil)
+	jobsDesc   = prometheus.NewDesc("ukai_jobs", "Jobs by effective tier", []string{"user", "tier", "state"}, nil)
+	unitsDesc  = prometheus.NewDesc("ukai_units", "Units of jobs by effective tier", []string{"user", "tier", "state"}, nil)
 	jobDesc    = prometheus.NewDesc("ukai_job_priority", "Effective priority of each job",
-		[]string{"namespace", "podgroup", "owner", "tier"}, nil)
+		[]string{"namespace", "podgroup", "user", "tier"}, nil)
 )
 
 // collector derives gauges from the last status, so that jobs that are gone leave
@@ -189,21 +189,21 @@ func (collector) Collect(ch chan<- prometheus.Metric) {
 	gauge(activeDesc, 1, string(s.Mode))
 	gauge(budgetDesc, s.Budget)
 
-	type key struct{ owner, tier, state string }
+	type key struct{ user, tier, state string }
 	jobs, units := map[key]float64{}, map[key]float64{}
 	for _, j := range s.Jobs {
-		k := key{j.Owner, string(j.Tier), "pending"}
+		k := key{j.User, string(j.Tier), "pending"}
 		if j.Running {
 			k.state = "running"
 		}
 		jobs[k]++
 		units[k] += j.Units
 		if s.jobMetrics {
-			gauge(jobDesc, float64(j.Priority), j.Namespace, j.Name, j.Owner, string(j.Tier))
+			gauge(jobDesc, float64(j.Priority), j.Namespace, j.Name, j.User, string(j.Tier))
 		}
 	}
 	for k, n := range jobs {
-		gauge(jobsDesc, n, k.owner, k.tier, k.state)
-		gauge(unitsDesc, units[k], k.owner, k.tier, k.state)
+		gauge(jobsDesc, n, k.user, k.tier, k.state)
+		gauge(unitsDesc, units[k], k.user, k.tier, k.state)
 	}
 }

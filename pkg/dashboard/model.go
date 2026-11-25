@@ -85,7 +85,7 @@ var heldReason = regexp.MustCompile(`user budget: (needs \d+(?:\.\d+)? units, (?
 
 // UserOf is the user that a PodGroup or pod belongs to.
 func UserOf(config *tierbudget.Config, labels map[string]string) string {
-	return labels[config.OwnerLabel]
+	return labels[config.UserLabel]
 }
 
 // usage follows the plugin's.
@@ -199,7 +199,7 @@ func Compute(config *tierbudget.Config, user string, d Data) *View {
 
 	input := make([]tiers.Job, 0, len(jobs))
 	for id, j := range jobs {
-		input = append(input, tiers.Job{ID: id, Owner: j.User, Class: j.class, Units: j.Units, Running: j.Running, Created: j.Created, Started: j.Since})
+		input = append(input, tiers.Job{ID: id, User: j.User, Class: j.class, Units: j.Units, Running: j.Running, Created: j.Created, Started: j.Since})
 	}
 	for id, r := range tiers.Assign(config.Policy, input) {
 		j := jobs[id]
