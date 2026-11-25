@@ -44,6 +44,9 @@ workloads: **add every custom workload type that users may submit**, as they set
 They do not cover those who can act as a service account, other schedulers, or requests for a
 long grace period when deleting a pod. That last one keeps GPUs, but does not free budget.
 
+Scaled to zero, Kyverno removes its webhooks, and no policy applies, whatever `failurePolicy` says (seen
+with 1.17 and 1.20). Run several replicas, and let few people scale or uninstall it.
+
 Start with `failureAction: Audit`, or `validationActions: [Audit]` in the second set.
 
 ## What the scheduler exposes
