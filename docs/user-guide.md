@@ -36,27 +36,91 @@ SIGKILL. So:
    complete, and does not run again.
 
 ```python
-import signal, sys
+import os, signal, sys
+import torch
 
+CHECKPOINT = "/shared/my-run/last.pt"  # must outlive the pod
 stop = False
 
 def on_term(signum, frame):
     global stop
-    stop = True
+    stop = True  # only note it: saving here could interrupt a step or another save
+
+def save(step):
+    torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "step": step},
+               CHECKPOINT + ".tmp")
+    os.replace(CHECKPOINT + ".tmp", CHECKPOINT)  # a half-written file never replaces a good one
 
 signal.signal(signal.SIGTERM, on_term)
+start = 0
+if os.path.exists(CHECKPOINT):
+    c = torch.load(CHECKPOINT, map_location="cpu")
+    model.load_state_dict(c["model"])
+    optimizer.load_state_dict(c["optimizer"])
+    start = c["step"]
 
-start = load_checkpoint_if_any()
 for step in range(start, total):
     train_step(step)
     if stop:
-        save_checkpoint(step + 1)
+        save(step + 1)
         sys.exit(143)  # not 0: there is more to do
+    if (step + 1) % 500 == 0:
+        save(step + 1)  # crashes of a node give no warning
 ```
 
-Set `terminationGracePeriodSeconds` to what a checkpoint takes, within your cluster's limit,
-and allow retries in the Job's `backoffLimit`. Kubernetes waits before it replaces a Job's evicted
-pod, longer each time, up to 10 minutes. Until then there is no pod to see.
+Also save whatever else your run needs to continue, such as the learning rate schedule and the place
+in the data.
+
+In the Job:
+
+```yaml
+spec:
+  backoffLimit: 20
+  podFailurePolicy:  # evictions do not use up retries, if your admins have set this up
+    rules:
+      - action: Ignore
+        onPodConditions: [{type: DisruptionTarget, status: "True"}]
+  template:
+    spec:
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 120  # the longest step and a save, with room to spare
+```
+
+Your cluster may limit the grace period. The job keeps its GPUs until it has ended, so a long one makes
+others wait. Ask your admins whether they [set up evictions and retries](install.md#evictions-and-retries).
+
+Kubernetes waits before it replaces a Job's evicted pod, longer each time, up to 10 minutes. Until
+then there is no pod to see.
+
+**What often goes wrong**
+
+| Problem | What to do |
+|---|---|
+| A shell script starts Python, and does not pass SIGTERM on | Start it with `exec python train.py`, or without a shell |
+| The program has no handler, and runs as the container's first process | The kernel ignores SIGTERM for it, so it runs until SIGKILL. Add the handler |
+| The checkpoint was on the pod's own disk | Use storage that outlives the pod |
+| The step is longer than the grace period | Check the flag more often, or raise the grace period |
+| Several processes, as with `torchrun`: some stop and others wait for them | Agree on it, as below |
+| Workers of a `DataLoader` inherit the handler | In `worker_init_fn`: `signal.signal(signal.SIGTERM, signal.SIG_DFL)` |
+| The framework saves by itself | Check its documentation, and that it exits with an error |
+
+With several processes, all must stop at the same step, and one of them saves:
+
+```python
+flag = torch.tensor(int(stop), device=device)
+torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.MAX)
+if flag.item():
+    if torch.distributed.get_rank() == 0:
+        save(step + 1)
+    torch.distributed.barrier()  # nobody leaves before it is saved
+    sys.exit(143)
+```
+
+Each process must get SIGTERM or hear of it this way. With sharded models (FSDP, DeepSpeed), all of
+them take part in saving: use the framework's own way.
+
+**Try it.** While the job runs, `kubectl delete pod <pod>`. It should save, come back, and go on from the
+right step. This is not an eviction, so it may use up a retry.
 
 ## Example
 
