@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
+	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_info"
+	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/resource_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/framework"
 
 	"github.com/takayuki112/ukai-scheduler/pkg/tiers"
@@ -127,6 +130,40 @@ func (c *Config) Units(gpus float64, nodeSelector map[string]string) tiers.Units
 		}
 	}
 	return tiers.UnitsOf(gpus * weight)
+}
+
+// TaskUnits is the charge for a pod. gpuMemory is that of each GPU of its node, in MiB,
+// or 0 if it has no node or that is not known.
+func (c *Config) TaskUnits(task *pod_info.PodInfo, gpuMemory int64) tiers.Units {
+	gpus := task.GpuRequirement.GetGpusQuota()
+	if task.GpuRequirement.GpuMemory() > 0 {
+		// The share of a GPU depends on the node, so charge whole ones.
+		gpus = float64(task.GpuRequirement.GetNumOfGpuDevices())
+		if portion := boundPortion(task, gpuMemory); portion > 0 {
+			gpus = resource_info.NewGpuResourceRequirementWithMultiFraction(task.GpuRequirement.GetNumOfGpuDevices(), portion, 0).GetGpusQuota()
+		}
+	}
+	var selector map[string]string
+	if task.Pod != nil {
+		selector = task.Pod.Spec.NodeSelector
+	}
+	return c.Units(gpus, selector)
+}
+
+// boundPortion is the fraction that a pod asked for, if KAI's binder has since turned it
+// into memory, and 0 if not. Users can set both annotations, and KAI goes by the memory,
+// so the memory must not be more than the fraction of the node's GPUs.
+func boundPortion(task *pod_info.PodInfo, gpuMemory int64) float64 {
+	if gpuMemory <= 0 || task.Pod == nil {
+		return 0
+	}
+	portion, err := strconv.ParseFloat(task.Pod.Annotations[constants.GpuFraction], 64)
+	// KAI rounds shares to hundredths.
+	if err != nil || !(portion > 0 && portion < 1) ||
+		float64(task.GpuRequirement.GpuMemory())/float64(gpuMemory) > portion+0.01 {
+		return 0
+	}
+	return portion
 }
 
 type parser struct {

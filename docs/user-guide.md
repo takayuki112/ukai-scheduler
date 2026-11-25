@@ -23,6 +23,8 @@ would run.
 | `user budget: no user: label ... is not set` | The label that says whose job it is, is missing | Set it, or ask your admins |
 | anything else | KAI's own reason, such as no free GPUs | |
 
+The [dashboard](dashboard.md) shows this live, with your budget and the queue.
+
 ## Your job was evicted
 
 Evicted pods get SIGTERM, then a grace period (30 seconds unless the job sets another), then

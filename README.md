@@ -84,6 +84,7 @@ team/pg-train  alice  mid    4      running  promoted  75 (was 50)  -       -
 |---|---|
 | Everyone | [Concepts](docs/concepts.md): the rules, with examples |
 | Users, who submit jobs | [User guide](docs/user-guide.md): why is my job waiting? |
+| | [Dashboard](docs/dashboard.md): your budget and jobs, live in a terminal |
 | Cluster admins | [Install](docs/install.md): replay, audit, enforce, roll back |
 | | [Configuration](docs/configuration.md): every setting |
 | | [Security](docs/security.md): keep users from evading the rules |

@@ -9,18 +9,15 @@ package tierbudget
 import (
 	"fmt"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/common_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_status"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/podgroup_info"
-	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/resource_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/framework"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/log"
 
@@ -261,36 +258,11 @@ func (p *plugin) usage(info *podgroup_info.PodGroupInfo) usage {
 }
 
 func (p *plugin) taskUnits(task *pod_info.PodInfo) tiers.Units {
-	gpus := task.GpuRequirement.GetGpusQuota()
-	if task.GpuRequirement.GpuMemory() > 0 {
-		// The share of a GPU depends on the node, so charge whole ones.
-		gpus = float64(task.GpuRequirement.GetNumOfGpuDevices())
-		if portion := p.boundPortion(task); portion > 0 {
-			gpus = resource_info.NewGpuResourceRequirementWithMultiFraction(task.GpuRequirement.GetNumOfGpuDevices(), portion, 0).GetGpusQuota()
-		}
+	var memory int64
+	if node := p.ssn.ClusterInfo.Nodes[task.NodeName]; node != nil {
+		memory = node.MemoryOfEveryGpuOnNode
 	}
-	var selector map[string]string
-	if task.Pod != nil {
-		selector = task.Pod.Spec.NodeSelector
-	}
-	return p.config.Units(gpus, selector)
-}
-
-// boundPortion is the fraction that a pod asked for, if KAI's binder has since turned it
-// into memory, and 0 if not. Users can set both annotations, and KAI goes by the memory,
-// so the memory must not be more than the fraction of the node's GPUs.
-func (p *plugin) boundPortion(task *pod_info.PodInfo) float64 {
-	node := p.ssn.ClusterInfo.Nodes[task.NodeName]
-	if node == nil || node.MemoryOfEveryGpuOnNode <= 0 || task.Pod == nil {
-		return 0
-	}
-	portion, err := strconv.ParseFloat(task.Pod.Annotations[constants.GpuFraction], 64)
-	// KAI rounds shares to hundredths.
-	if err != nil || !(portion > 0 && portion < 1) ||
-		float64(task.GpuRequirement.GpuMemory())/float64(node.MemoryOfEveryGpuOnNode) > portion+0.01 {
-		return 0
-	}
-	return portion
+	return p.config.TaskUnits(task, memory)
 }
 
 // hold says why a task may not be placed, or "" if it may.
