@@ -65,6 +65,38 @@ has at most one budget of work in line, however many jobs they submit.
 restart in the middle, at most one budget of work in line for random jobs, no change in who is
 evicted, and that the default leaves the order as it is.
 
+## Gangs that lose a pod after another has finished
+
+**Today.** A gang is a job that KAI starts only with a minimum number of pods. If one of its pods
+finishes and another is evicted or deleted, the replacement can wait without end, even next to
+free GPUs. KAI counts only the pods that are still to run, so the minimum is never reached:
+
+    Job is not ready for scheduling. Waiting for 2 pods, currently 1 exist, 0 are gated
+
+This is KAI v0.18.9, and not this project: stock KAI does the same with the same job, and left
+0.8% of the jobs of a load test waiting, as did `enforce`. That load has short jobs and constant
+evictions, so it says little about other clusters. Eviction by KAI's consolidation can take one pod
+of a gang and leave the others, which makes it more likely.
+
+| Job | A gang? |
+|---|---|
+| Job with one pod | No |
+| Job with several pods | Only with the annotation `kai.scheduler/batch-min-member` of 2 or more |
+| Kinds for distributed work, such as PyTorchJob, MPIJob, LeaderWorkerSet, Ray | KAI sets a minimum by itself, often above 1 |
+
+Only Jobs were tested. Gangs whose pods all end together rarely meet this, as it needs an eviction
+between the first pod's end and the last one's.
+
+**Until then.** Delete the job and submit it again. Do not set the annotation on Jobs whose pods do
+not need each other.
+
+**The plan.** It belongs in KAI: report it there with the steps below, and take the fix with the
+next KAI version. A workaround here would have to change a gang's minimum, which this project does
+not touch otherwise.
+
+**Steps.** An Indexed Job with two pods and `kai.scheduler/batch-min-member: "2"`. When both run, let
+one succeed and delete the other. The new pod stays Pending.
+
 ## Other ideas
 
 - **Reserve GPUs for a large job.** Smaller P1 that fit may overtake a large one without end, as

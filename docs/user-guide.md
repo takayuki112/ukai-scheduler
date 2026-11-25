@@ -56,7 +56,8 @@ for step in range(start, total):
 ```
 
 Set `terminationGracePeriodSeconds` to what a checkpoint takes, within your cluster's limit,
-and allow retries in the Job's `backoffLimit`.
+and allow retries in the Job's `backoffLimit`. Kubernetes waits before it replaces a Job's evicted
+pod, longer each time, up to 10 minutes. Until then there is no pod to see.
 
 ## Example
 

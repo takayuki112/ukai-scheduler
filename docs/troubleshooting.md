@@ -13,6 +13,9 @@
 | A job has another class than its pod spec | A `priorityClassName` label overrides it | [Security](security.md) |
 | A P1 moved though it should not | KAI's own `consolidation` is enabled as well; the log warns | [Consolidation](configuration.md#consolidation) |
 | An evicted job does not come back | Its program exited 0 on SIGTERM | [User guide](user-guide.md#your-job-was-evicted) |
+| An evicted Job has no pod for minutes | Kubernetes waits before it replaces a Job's pod, up to 10 minutes | [User guide](user-guide.md#your-job-was-evicted) |
+| `Waiting for 2 pods, currently 1 exist` for a job of several pods | One of its pods finished and another was evicted; a limit of KAI | [Delete and resubmit](future.md#gangs-that-lose-a-pod-after-another-has-finished) |
+| Evictions use up a Job's `backoffLimit` | KAI does not mark evicted pods by default | [Evictions and retries](install.md#evictions-and-retries) |
 | A large P1 never starts | Smaller ones of the same user keep taking its place | The user has to pause them |
 | Pods have no PodGroup, nothing is scheduled | KAI's pod-grouper is down | Not this project |
 

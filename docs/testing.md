@@ -34,6 +34,23 @@ not idle. The scheduler was near its default limit of 512 MiB in all cases, and 
 The cluster tests need go, docker, kind, kubectl, helm and jq. They use their own kubeconfig, and
 refuse any context but their kind cluster. Run the smoke test first; it makes the cluster.
 
+## Long operation
+
+24 simulated nodes, 12 users with a budget of 8, one job a second for 150 minutes, then 30 minutes
+to finish: 9,059 jobs and 548,457 pod events in `enforce`.
+
+| | |
+|---|---|
+| Budget violations | **0** |
+| Scheduler restarts, caught panics | 0, 0 |
+| Goroutines | about 173 throughout |
+| Jobs that never finished | **73**, all gangs of two pods, see [future work](future.md#gangs-that-lose-a-pod-after-another-has-finished) |
+
+The run counts as failed because of the last row. A 40-minute run of stock KAI left 19 of 2,459 jobs in the
+same way. The waiting jobs also make the memory hard to read: it rose with them, so whether there is a slow
+leak is still to be shown.
+
 ## What is not tested
 
-Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, and long operation.
+Real GPUs, GPU sharing with real devices, KAI versions other than v0.18.9, a conclusive search for
+memory leaks, and gangs other than Jobs.

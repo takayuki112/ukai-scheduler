@@ -20,6 +20,18 @@ flowchart LR
 | Nobody but KAI can write PodGroups | The user and class are read there, see [security](security.md) |
 | You can edit KAI's Helm values, and restart the scheduler | |
 
+### Evictions and retries
+
+By default, each eviction counts against a Job's `backoffLimit`, in stock KAI too. To avoid that, set
+`scheduler.args.update-pod-eviction-condition: "true"` in KAI's values, and have Jobs ignore it:
+
+```yaml
+podFailurePolicy:          # in the Job's spec; the pods need restartPolicy: Never
+  rules:
+    - action: Ignore
+      onPodConditions: [{type: DisruptionTarget, status: "True"}]
+```
+
 ## 1. Replay a snapshot
 
 Runs one scheduling cycle offline, as stock KAI and with the plugin, and lists what differs.

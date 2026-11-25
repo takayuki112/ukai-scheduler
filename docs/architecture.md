@@ -64,4 +64,6 @@ runs vary too much to compare them closely.
 - Same budget for everyone.
 - One KAI version at a time: it compiles against KAI's internals.
 - A stream of small budgeted jobs can delay a large one of the same user.
+- A gang can be left waiting if one of its pods finishes and another is evicted, as in stock KAI,
+  see [future work](future.md#gangs-that-lose-a-pod-after-another-has-finished).
 - `go install` by version does not work, because KAI needs `replace` directives.
