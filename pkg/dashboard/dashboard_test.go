@@ -587,3 +587,14 @@ func TestShortNames(t *testing.T) {
 		}
 	}
 }
+
+func TestJobNames(t *testing.T) {
+	for id, want := range map[string]string{
+		"team/pg-a-b-0a11078b-76c9-4222-9f3e-1a2b3c4d5e6f": "team/a-b", "team/pg-train": "team/pg-train",
+		"team/x-0a11078b-76c9-4222-9f3e-1a2b3c4d5e6f": "team/x-0a11078b-76c9-4222-9f3e-1a2b3c4d5e6f",
+	} {
+		if got := jobName(id); got != want {
+			t.Errorf("%s: %s", id, got)
+		}
+	}
+}

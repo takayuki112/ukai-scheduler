@@ -13,6 +13,12 @@ var (
 	memory  = regexp.MustCompile(`(?i)\d+gb`)
 )
 
+// KAI names a PodGroup pg-<name>-<UID>.
+var podGroup = regexp.MustCompile(`/pg-(.+)-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$`)
+
+// jobName is the namespace and name of the Job, or whatever it is.
+func jobName(id string) string { return podGroup.ReplaceAllString(id, "/$1") }
+
 // shortNames shortens GPU types as NVIDIA's labels name them, such as NVIDIA-H100-80GB-HBM3
 // to H100. Those that would be the same keep their memory, or else their whole name.
 func shortNames(types []string) map[string]string {

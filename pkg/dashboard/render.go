@@ -212,7 +212,7 @@ func (c *canvas) jobs(v *View) {
 			if j.Gone {
 				state = "ending"
 			}
-			c.add(tierStyle[tier], "  %-*s  %-16s %6s  %-7s %5s  %s", c.nameWidth(), cut(j.ID, c.nameWidth()), cut(v.gpus(j.GPUs, j.Types), 16), units(j), state, age(c.Now.Sub(j.Since)), j.ClassName)
+			c.add(tierStyle[tier], "  %-*s  %-16s %6s  %-7s %5s  %s", c.nameWidth(), cut(jobName(j.ID), c.nameWidth()), cut(v.gpus(j.GPUs, j.Types), 16), units(j), state, age(c.Now.Sub(j.Since)), j.ClassName)
 			if tier == tiers.Held {
 				c.add(tierStyle[tier], "    %s", j.Reason)
 			}
@@ -239,7 +239,7 @@ func (c *canvas) queues(v *View) {
 			if !mine && shown >= c.Limit {
 				continue
 			}
-			s, name, user := plain, j.ID, j.User
+			s, name, user := plain, jobName(j.ID), j.User
 			if mine {
 				s, user = bold, "you"
 			} else {
