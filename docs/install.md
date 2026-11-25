@@ -2,13 +2,10 @@
 
 For admins of a cluster that runs **KAI v0.18.9**. Each step is safe to stop at.
 
-```mermaid
-flowchart LR
-    r[1 Replay<br/>offline] --> b[2 Image] --> a[3 Audit<br/>only logs] --> s[4 Policies] --> e[5 Enforce]
-    e -. "mode: audit" .-> a
-    e -. "stock values" .-> k[Stock KAI]
-    a -. "stock values" .-> k
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/install-dark.svg">
+  <img src="images/install-light.svg" alt="Five steps: replay offline, image, audit, which only logs, policies, and enforce. mode: audit leads from enforce back to audit, and stock values lead from either to stock KAI">
+</picture>
 
 ## Before you start
 

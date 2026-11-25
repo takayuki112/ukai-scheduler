@@ -55,16 +55,10 @@ replaces only the scheduler's image. Tiers are worked out afresh every cycle fro
 running, and change only KAI's in-memory copy of a job's priority: nothing is stored, your
 objects are not modified, and a change of tier restarts nothing by itself.
 
-```mermaid
-flowchart LR
-    jobs[Jobs and pods] --> kai
-    subgraph kai[Scheduler, every cycle]
-        direction LR
-        snap[Snapshot] --> tiers[<b>tierbudget</b><br/>who is over budget,<br/>promoted or excess?] --> act[KAI's actions<br/>allocate, preempt, ...]
-    end
-    kai --> gpus[GPUs]
-    tiers -.-> obs[Metrics, /tiers,<br/>events on held pods]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.svg">
+  <img src="docs/images/overview-light.svg" alt="Jobs and pods go to the scheduler, which every cycle takes a snapshot, lets tierbudget decide who is over budget, promoted or excess, and runs KAI's actions, which place jobs on GPUs. tierbudget also gives metrics, /tiers and events on held pods">
+</picture>
 
 If the configuration is wrong or the plugin fails, the scheduler behaves as stock KAI.
 

@@ -4,13 +4,10 @@ For users: those who submit jobs. Your cluster's class names and numbers may dif
 
 ## Which class?
 
-```mermaid
-flowchart TD
-    a{Need it soon, and<br/>is it small?} -- yes --> p1[<b>P1</b><br/>counts against your budget]
-    a -- no --> b{Would losing progress<br/>hurt?}
-    b -- yes --> p2[<b>P2</b><br/>promoted while your<br/>budget is unused]
-    b -- no --> p3[<b>P3</b><br/>whatever is free]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/which-dark.svg">
+  <img src="images/which-light.svg" alt="Need it soon, and is it small? P1, which counts against your budget. If not, would losing progress hurt? P2, promoted while your budget is unused. If not, P3, whatever is free">
+</picture>
 
 Do not use P1 for everything: beyond the budget it waits even when GPUs are idle, where a P2
 would run.

@@ -24,25 +24,10 @@ need not have all of them.
 
 ## Tiers
 
-```mermaid
-flowchart TD
-    start([Job]) --> gpu{Has GPUs, and its<br/>class is listed?}
-    gpu -- no --> un[unmanaged<br/>as in stock KAI]
-    gpu -- yes --> kind{Class}
-    kind -- charged --> b1[budget]
-    kind -- budgeted --> run1{Running?}
-    run1 -- yes --> b2[budget]
-    run1 -- no --> fit{Fits the budget, after<br/>what the user runs?}
-    fit -- yes --> b3[budget<br/>may start]
-    fit -- no --> held[<b>held</b><br/>waits, says why]
-    kind -- promotable --> run2{Running?}
-    run2 -- yes --> spare{Fits what is left<br/>of the budget?}
-    spare -- yes --> prom[<b>promoted</b><br/>P1 priority]
-    spare -- no --> allow
-    run2 -- no --> allow{Fits the<br/>allowance?}
-    allow -- yes --> norm[<b>normal</b><br/>keeps its priority]
-    allow -- no --> exc[<b>excess</b><br/>lower priority]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/tiers-dark.svg">
+  <img src="images/tiers-light.svg" alt="Flow chart. Jobs without GPUs or of classes that are not listed are unmanaged. Charged jobs and running budgeted jobs are budget. A waiting budgeted job may start if it fits the budget after what the user runs, and is held otherwise. A running promotable job is promoted if it fits what is left of the budget. Other promotable jobs are normal if they fit the allowance, and excess otherwise">
+</picture>
 
 ## The rules
 

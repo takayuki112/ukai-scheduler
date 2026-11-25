@@ -188,6 +188,11 @@ def draw(theme):
             f'<rect width="{W}" height="{H}" rx="10" fill="{c["bg"]}"/>' + "".join(d.body) + "</svg>\n")
 
 
-for name in THEMES:
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"story-{name}.svg"), "w") as f:
-        f.write(draw(name))
+def save(name, svg):
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), "w") as f:
+        f.write(svg)
+
+
+if __name__ == "__main__":
+    for name in THEMES:
+        save(f"story-{name}.svg", draw(name))

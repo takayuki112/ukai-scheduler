@@ -73,16 +73,10 @@ move`, separated by `;`:
 consolidation: "high > high,mid,low; mid,low > mid,low"
 ```
 
-```mermaid
-flowchart LR
-    subgraph p1[Pass 1]
-        h[place high] -- may move --> hm[high, mid, low]
-    end
-    subgraph p2[Pass 2]
-        m[place mid, low] -- may move --> ml[mid, low]
-    end
-    p1 --> p2
-```
+| Pass | Places | May move |
+|---|---|---|
+| 1 | `high` | `high`, `mid`, `low` |
+| then 2 | `mid`, `low` | `mid`, `low` |
 
 `@promoted` stands for promoted jobs, which do not count as their class. Classes that are not
 listed are neither placed nor moved. Each pass has its own search budget. A partly running job

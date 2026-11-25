@@ -1,34 +1,16 @@
 # Architecture
 
-```mermaid
-flowchart TD
-    main["cmd/scheduler<br/>registers both, then runs KAI"] --> kai[KAI v0.18.9, unmodified]
-    kai -- "each cycle" --> plugin["pkg/tierbudget<br/>plugin: reads jobs, applies results"]
-    kai -- "each cycle" --> action["ukai-consolidation<br/>wraps KAI's"]
-    plugin --> tiers["pkg/tiers<br/>the rules, a pure function"]
-    action --> plugin
-    replay["cmd/replay, pkg/replay<br/>one cycle on a snapshot"] --> kai
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/components-dark.svg">
+  <img src="images/components-light.svg" alt="cmd/scheduler registers both, then runs KAI v0.18.9, unmodified. cmd/replay and pkg/replay run one cycle of it on a snapshot. Each cycle KAI calls the plugin in pkg/tierbudget, which reads jobs, applies results and calls the rules in pkg/tiers, a pure function, and ukai-consolidation, which wraps KAI's and asks the plugin">
+</picture>
 
 ## One cycle
 
-```mermaid
-sequenceDiagram
-    participant K as KAI
-    participant P as tierbudget
-    participant T as tiers.Assign
-    K->>K: snapshot of the cluster
-    K->>P: OnSessionOpen
-    P->>T: jobs: user, class, units, running, times
-    T-->>P: tier and priority of each
-    P->>P: publish metrics and status
-    P->>K: in enforce mode: set in-memory priorities, add hooks
-    loop allocate, consolidate, reclaim, preempt
-        K->>P: may this task be placed?
-        P-->>K: no, with a reason, if over budget now
-    end
-    K->>P: OnSessionClose
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/cycle-dark.svg">
+  <img src="images/cycle-light.svg" alt="KAI takes a snapshot of the cluster and calls tierbudget's OnSessionOpen. It passes the jobs to tiers.Assign, which returns the tier and priority of each, publishes metrics and status, and in enforce mode sets in-memory priorities and adds hooks. During allocate, consolidate, reclaim and preempt, KAI asks whether a task may be placed, and tierbudget says no, with a reason, if over budget now. Last, KAI calls OnSessionClose">
+</picture>
 
 ## Decisions
 

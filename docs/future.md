@@ -23,14 +23,10 @@ the user's budget frees up:
 | `submission` (default) | its creation, as today |
 | `eligible` | when it first fitted its user's budget |
 
-```mermaid
-stateDiagram-v2
-    [*] --> Held: submitted, budget in use
-    [*] --> InLine: submitted, fits
-    Held --> InLine: the budget has room, the time is noted
-    InLine --> Running: GPUs are free
-    Running --> [*]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/queue-dark.svg">
+  <img src="images/queue-light.svg" alt="A submitted P1 that fits is in line. One that does not, as the budget is in use, is held, and joins the line when the budget has room, when the time is noted. It runs when GPUs are free">
+</picture>
 
 A user's waiting P1 are taken oldest first. Each that fits next to what the user runs, and next
 to those already in line, joins the line. The rest are held and have no place in it. So a user
