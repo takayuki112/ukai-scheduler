@@ -1,0 +1,27 @@
+# As test/smoke/values.yaml, with the ladder instead of the budget.
+scheduler:
+  image:
+    name: ukai-scheduler
+    tag: smoke
+    pullPolicy: Never
+  plugins:
+    tierbudget:
+      priority: 50
+      arguments:
+        mode: enforce
+        userLabel: example.com/user
+        scheme: ladder
+        ladderClasses: test-mid
+        ladder: "75=2, 70=1, 40"
+        evictGap: "10"
+        levelLabel: example.com/level
+        protectLabel: example.com/protect
+        whenFullLabel: example.com/when-full
+        protectLimit: "6"
+        protectFor: 1h
+  actions:
+    consolidation:
+      enabled: false
+    ukai-consolidation:
+      enabled: true
+      priority: 400

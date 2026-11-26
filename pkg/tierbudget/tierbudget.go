@@ -34,6 +34,9 @@ var (
 	errorLog  = &changeLog{}
 )
 
+// clock is replaced in simulations.
+var clock = time.Now
+
 // lastGroups remembers PodGroups for their orphans. After a restart, the pods' own label
 // and class have to do.
 var lastGroups atomic.Pointer[map[common_info.PodGroupID]group]
@@ -114,7 +117,7 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 	var results map[string]tiers.Result
 	var outcome *ladderOutcome
 	if p.config.Scheme == SchemeLadder {
-		results, outcome = p.assignLadder(time.Now())
+		results, outcome = p.assignLadder(clock())
 	} else {
 		results = tiers.Assign(p.config.Policy, p.tierJobs())
 	}

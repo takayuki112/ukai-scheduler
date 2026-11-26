@@ -109,8 +109,14 @@ A label, for example `example.com/protect: "true"`, asks that a job is not evict
   light users waiting for days.
 - **For a time.** After `protectFor`, by default 24 hours, a job is an ordinary running job again.
   Users then need to save a checkpoint once a day, not be ready for eviction at any moment.
-- **Within the queue's quota.** KAI starts a job that cannot be evicted only within its queue's
-  deserved quota. On a queue whose deserved quota is 0, protected jobs never start.
+- **Within the queue's quota.** KAI starts a job that cannot be evicted only within the deserved
+  quota of its queue and of every parent, for *every* resource it asks for: GPUs, but also CPU and
+  memory. A quota of -1 means no limit. On queues whose deserved quota is 0, as KAI's default
+  queues, protected jobs never start, and the event says `NonPreemptibleOverQuota`.
+- **KAI undercounts them.** KAI adds up each queue's jobs that cannot be evicted before this
+  plugin marks them, so protected jobs that run are not in that sum. Only this plugin's limits
+  then hold them back, not the queue's quota. Opening this plugin before KAI's `proportion`, with a
+  plugin priority above 1800, might fix that, but is untested.
 
 A protected job that does not fit waits, or with `example.com/when-full: lower` runs as an
 ordinary job. One that runs is never demoted: its user just cannot protect more until it ends.
@@ -133,7 +139,34 @@ ordinary job. One that runs is never demoted: its user just cannot protect more 
 - Whether history should count, as in Slurm's fair share: GPU hours of the past days, not just
   what runs now. It needs stored state, so it is left out of the first version.
 
-## How it will be judged
+## First results
+
+`COMPARE=1 go test ./pkg/tierbudget -run TestCompare -v -timeout 2h` runs KAI's actions and this
+plugin against a simulated clock: 8 nodes of 8 GPUs, 2 heavy users who always keep 3 jobs of 4 or
+8 GPUs waiting (2 to 10 hours each), and 10 light users who submit a job of 1 or 2 GPUs (30
+minutes to 3 hours) about every 4 hours. One queue, jobs of one pod, no checkpoints: an evicted
+job starts over. 48 hours, without the first and last 6, mean of 3 seeds.
+
+| Scheme | Light wait, median / 95% | Heavy wait, median | Heavy evictions | GPU hours lost | Heavy GPU hours | GPUs busy |
+|---|---|---|---|---|---|---|
+| Stock KAI | 37 min / 3.5 h | 4.1 h | 0 | 0 | 2556 | 99% |
+| Budget 8, allowance 8 | 0 / 0 | 2.4 h | 27 | 117 | 2376 | 96% |
+| Ladder, steps of 8 units | 0 / 0 | 4.1 h | 15 | 72 | 2372 | 96% |
+| Ladder, steps of a quarter share | 0 / 0 | 3.1 h | 16 | 54 | 2505 | 97% |
+| As above, half of heavy jobs protected | 0 / 0 | 3.5 h | 16 | 89 | 2347 | 96% |
+
+- Every scheme lets light users start at once; stock KAI makes them queue behind heavy work.
+- The ladder evicts heavy jobs about half as often as the budget, and the share loses the least
+  work.
+- Protection did not reduce what was lost here: unprotected jobs were evicted instead, and their
+  users' other jobs ranked lower.
+- Light users barely compete with each other in this load, so it cannot tell the schemes apart
+  for them. A busier load is still to be run.
+
+On kind, `test/ladder/run.sh` checks steps, the gap, levels, holds with reasons, and protection
+with real pods.
+
+## Further comparisons
 
 On kind, with two heavy users who always have work queued and ten light users who now and then
 submit a job of one or two GPUs, each run with the same seed:
