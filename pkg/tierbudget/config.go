@@ -7,12 +7,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/resource_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/framework"
 
+	"github.com/takayuki112/ukai-scheduler/pkg/ladder"
 	"github.com/takayuki112/ukai-scheduler/pkg/tiers"
 )
 
@@ -34,13 +36,40 @@ const (
 	argProtected        = "protectedPriority" // without consolidation passes, running jobs from this priority up are not moved; default promotedPriority
 	argJobMetrics       = "jobMetrics"        // false (default) or true: a metric for each job
 	argDefaultWeight    = "defaultGPUWeight"  // units per GPU of any other type; default 1
+
+	// The ladder scheme, see docs/ladder.md.
+	argScheme         = "scheme"              // budget (default) or ladder
+	argLadderClasses  = "ladderClasses"       // comma-separated priority classes; required with ladder
+	argLadder         = "ladder"              // priority=width, ..., floor; required with ladder
+	argLadderWidth    = "ladderWidth"         // units (default) or share
+	argShareWindow    = "shareWindow"         // how long a user counts as active; default 1h
+	argLevelLabel     = "levelLabel"          // PodGroup label with a chosen level; default: none
+	argProtectLabel   = "protectLabel"        // PodGroup label, "true" to protect; default: none
+	argWhenFullLabel  = "whenFullLabel"       // PodGroup label, "lower" to run lower instead of waiting
+	argProtectCost    = "protectCost"         // default 3
+	argProtectLimit   = "protectLimit"        // per user, at cost: units, or a fraction of the share
+	argProtectCluster = "protectClusterLimit" // fraction of the cluster's units; default 0.5
+	argProtectFor     = "protectFor"          // default 24h; 0 for no end
+	argEvictGap       = "evictGap"            // default 0
 )
 
 var knownArgs = []string{
 	argMode, argUserLabel, argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
 	argPromotedPriority, argExcessPriority, argLargeJobs, argGPUTypeLabel, argGPUWeights, argDefaultWeight,
 	argConsolidation, argProtected, argJobMetrics,
+	argScheme, argLadderClasses, argLadder, argLadderWidth, argShareWindow, argLevelLabel, argProtectLabel,
+	argWhenFullLabel, argProtectCost, argProtectLimit, argProtectCluster, argProtectFor, argEvictGap,
 }
+
+// Scheme is how priorities are decided.
+type Scheme string
+
+const (
+	// SchemeBudget is the budget, allowance and promotion of package tiers.
+	SchemeBudget Scheme = "budget"
+	// SchemeLadder is package ladder.
+	SchemeLadder Scheme = "ladder"
+)
 
 // Mode says whether decisions take effect.
 type Mode string
@@ -69,6 +98,24 @@ type Config struct {
 	ProtectedPriority int32
 	// JobMetrics adds a metric for each job.
 	JobMetrics bool
+
+	Scheme Scheme
+	Ladder LadderConfig
+}
+
+// LadderConfig is the configuration of the ladder scheme.
+type LadderConfig struct {
+	// Rungs have widths in units, or with Share, in fractions of the share.
+	Rungs                                   []ladder.Rung
+	Share                                   bool
+	ShareWindow                             time.Duration
+	LevelLabel, ProtectLabel, WhenFullLabel string
+	ProtectCost                             float64
+	// ProtectLimit is in units, or with Share, a fraction of the share.
+	ProtectLimit   tiers.Units
+	ProtectCluster float64 // fraction
+	ProtectFor     time.Duration
+	EvictGap       int32
 }
 
 // ParseConfig reads plugin arguments. The error lists every problem found.
@@ -93,6 +140,23 @@ func ParseConfig(args framework.PluginArguments) (*Config, error) {
 		c.DefaultWeight = p.number(argDefaultWeight)
 	}
 
+	c.Scheme = Scheme(p.oneOf(argScheme, string(SchemeBudget), string(SchemeLadder)))
+	if c.GPUTypeLabel == "" && len(c.GPUWeights) > 0 {
+		p.failf("%s needs %s", argGPUWeights, argGPUTypeLabel)
+	}
+	if c.Scheme == SchemeLadder {
+		p.parseLadder(c)
+		if err := errors.Join(p.errs...); err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	for _, k := range ladderOnly {
+		if p.get(k) != "" {
+			p.failf("%s: only with %s=%s", k, argScheme, SchemeLadder)
+		}
+	}
+
 	p.required(argBudgeted)
 	p.classes(c.Classes, argBudgeted, tiers.Budgeted)
 	p.classes(c.Classes, argCharged, tiers.Charged)
@@ -111,9 +175,6 @@ func ParseConfig(args framework.PluginArguments) (*Config, error) {
 	c.ProtectedPriority = c.Policy.PromotedPriority
 	if p.get(argProtected) != "" || p.get(argPromotable) == "" && len(c.Passes) == 0 {
 		c.ProtectedPriority = p.priority(argProtected)
-	}
-	if c.GPUTypeLabel == "" && len(c.GPUWeights) > 0 {
-		p.failf("%s needs %s", argGPUWeights, argGPUTypeLabel)
 	}
 	if err := errors.Join(p.errs...); err != nil {
 		return nil, err
@@ -271,4 +332,105 @@ func sortedKeys(m map[string]string) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+var (
+	budgetOnly = []string{argBudgeted, argCharged, argPromotable, argBudget, argAllowance,
+		argPromotedPriority, argExcessPriority, argLargeJobs}
+	ladderOnly = []string{argLadderClasses, argLadder, argLadderWidth, argShareWindow, argLevelLabel,
+		argProtectLabel, argWhenFullLabel, argProtectCost, argProtectLimit, argProtectCluster, argProtectFor,
+		argEvictGap}
+)
+
+func (p *parser) parseLadder(c *Config) {
+	for _, k := range budgetOnly {
+		if p.get(k) != "" {
+			p.failf("%s: not with %s=%s", k, argScheme, SchemeLadder)
+		}
+	}
+	p.required(argLadderClasses)
+	p.classes(c.Classes, argLadderClasses, tiers.Laddered)
+	l := &c.Ladder
+	l.Share = p.oneOf(argLadderWidth, "units", "share") == "share"
+	l.Rungs = p.rungs()
+	l.ShareWindow = p.duration(argShareWindow, time.Hour)
+	l.LevelLabel, l.ProtectLabel, l.WhenFullLabel = p.get(argLevelLabel), p.get(argProtectLabel), p.get(argWhenFullLabel)
+	l.ProtectCost = p.optionalNumber(argProtectCost, 3)
+	if l.ProtectCost < 1 {
+		p.failf("%s: must be at least 1", argProtectCost)
+	}
+	l.ProtectLimit = tiers.UnitsOf(p.optionalNumber(argProtectLimit, 0))
+	l.ProtectCluster = p.optionalNumber(argProtectCluster, 0.5)
+	if l.ProtectCluster > 1 {
+		p.failf("%s: a fraction from 0 to 1", argProtectCluster)
+	}
+	l.ProtectFor = p.duration(argProtectFor, 24*time.Hour)
+	if p.get(argEvictGap) != "" {
+		l.EvictGap = p.priority(argEvictGap)
+	}
+	if l.ProtectLabel != "" && l.ProtectLimit == 0 {
+		p.failf("%s needs %s", argProtectLabel, argProtectLimit)
+	}
+	// Consolidation never moves running jobs on the top rung, unless set otherwise.
+	c.ProtectedPriority = math.MaxInt32
+	if len(l.Rungs) > 0 {
+		c.ProtectedPriority = l.Rungs[0].Priority
+	}
+	if p.get(argProtected) != "" {
+		c.ProtectedPriority = p.priority(argProtected)
+	}
+}
+
+// rungs parses "75=4, 70=4, 40": priorities from high to low, the last without a width.
+func (p *parser) rungs() []ladder.Rung {
+	items := p.list(argLadder)
+	if len(items) == 0 {
+		p.failf("%s: required", argLadder)
+		return nil
+	}
+	var rungs []ladder.Rung
+	for i, item := range items {
+		priority, width, hasWidth := strings.Cut(item, "=")
+		last := i == len(items)-1
+		if hasWidth == last {
+			p.failf("%s: %q: every step but the last needs a width, as priority=width", argLadder, item)
+			continue
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(priority), 10, 32)
+		if err != nil {
+			p.failf("%s: %q is not a 32-bit integer", argLadder, priority)
+			continue
+		}
+		r := ladder.Rung{Priority: int32(n)}
+		if !last {
+			w := p.parseNumber(argLadder, strings.TrimSpace(width))
+			if w <= 0 {
+				p.failf("%s: %q: the width must be above 0", argLadder, item)
+			}
+			r.Width = tiers.UnitsOf(w)
+		}
+		if len(rungs) > 0 && r.Priority >= rungs[len(rungs)-1].Priority {
+			p.failf("%s: priorities must fall from step to step", argLadder)
+		}
+		rungs = append(rungs, r)
+	}
+	return rungs
+}
+
+func (p *parser) optionalNumber(key string, otherwise float64) float64 {
+	if p.get(key) == "" {
+		return otherwise
+	}
+	return p.parseNumber(key, p.get(key))
+}
+
+func (p *parser) duration(key string, otherwise time.Duration) time.Duration {
+	if p.get(key) == "" {
+		return otherwise
+	}
+	d, err := time.ParseDuration(p.get(key))
+	if err != nil || d < 0 {
+		p.failf("%s: %q is not a duration such as 30m", key, p.get(key))
+	}
+	return d
 }

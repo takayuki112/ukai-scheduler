@@ -27,7 +27,7 @@ func TestParseConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Config{
-		Mode: Enforce, UserLabel: "example.com/user",
+		Mode: Enforce, UserLabel: "example.com/user", Scheme: SchemeBudget,
 		Classes:      map[string]tiers.Class{"high": tiers.Budgeted, "workspace": tiers.Charged, "mid": tiers.Promotable, "mid-alt": tiers.Promotable},
 		Policy:       tiers.Policy{Budget: 4000, Allowance: 4500, PromotedPriority: 75, ExcessPriority: 45, LargeJobs: tiers.LargeNormalIfFirst},
 		GPUTypeLabel: "gpu-type", GPUWeights: map[string]float64{"small": 1, "big": 2.5}, DefaultWeight: 4, ProtectedPriority: 75,

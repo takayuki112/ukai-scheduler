@@ -92,7 +92,7 @@ func (p *plugin) allowedByDefault(info *podgroup_info.PodGroupInfo) bool {
 		return false
 	}
 	state := p.jobs[info.UID]
-	return state == nil || state.class == tiers.Promotable
+	return state == nil || state.class == tiers.Promotable || state.class == tiers.Laddered
 }
 
 // allowedIn says whether a job takes part in a pass. A job that is partly running must

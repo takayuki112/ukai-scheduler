@@ -24,9 +24,13 @@ type Status struct {
 	Time time.Time `json:"time"`
 	Mode Mode      `json:"mode,omitempty"`
 	// Error says why stock behaviour applies. There are then no jobs.
-	Error  string      `json:"error,omitempty"`
-	Budget float64     `json:"budget"`
-	Jobs   []JobStatus `json:"jobs"`
+	Error  string  `json:"error,omitempty"`
+	Budget float64 `json:"budget"`
+	// Scheme is empty for the budget.
+	Scheme Scheme `json:"scheme,omitempty"`
+	// Share is the fair share in units, with ladder steps that follow it.
+	Share float64     `json:"share,omitempty"`
+	Jobs  []JobStatus `json:"jobs"`
 
 	jobMetrics bool
 }
@@ -46,6 +50,10 @@ type JobStatus struct {
 	Priority      int32  `json:"priority"`
 	ClassPriority int32  `json:"classPriority"`
 	Reason        string `json:"reason,omitempty"`
+	// Ahead is, with the ladder, the units ahead of the job in its user's line.
+	Ahead float64 `json:"ahead,omitempty"`
+	// Protected is set, with the ladder, for a job that may not be evicted.
+	Protected bool `json:"protected,omitempty"`
 }
 
 var (
@@ -68,10 +76,13 @@ func init() { prometheus.MustRegister(tierChanges, panicCount, collector{}) }
 func LastStatus() *Status { return lastStatus.Load() }
 
 // buildStatus must run before priorities are changed.
-func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
+func (p *plugin) buildStatus(results map[string]tiers.Result, outcome *ladderOutcome) *Status {
 	s := &Status{
 		Time: time.Now(), Mode: p.config.Mode, Budget: p.config.Policy.Budget.Float(),
 		Jobs: []JobStatus{}, jobMetrics: p.config.JobMetrics,
+	}
+	if outcome != nil {
+		s.Scheme, s.Share = SchemeLadder, outcome.share.Float()
 	}
 	for id, job := range p.jobs {
 		r := results[string(id)]
@@ -83,6 +94,7 @@ func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 			Class: job.info.PodGroup.Spec.PriorityClassName, Running: job.running, Units: job.units.Float(),
 			Tier: r.Tier, Priority: r.Priority, ClassPriority: job.info.Priority, Reason: r.Reason,
 		})
+		outcome.describe(&s.Jobs[len(s.Jobs)-1], string(id))
 	}
 	for id, o := range p.orphans {
 		r := results[string(id)]
@@ -94,6 +106,7 @@ func (p *plugin) buildStatus(results map[string]tiers.Result) *Status {
 			Namespace: namespace, Name: name, User: o.user, Class: o.className, Running: true, Orphan: true,
 			Units: o.units.Float(), Tier: r.Tier, Priority: r.Priority, ClassPriority: o.priority,
 		})
+		outcome.describe(&s.Jobs[len(s.Jobs)-1], string(id))
 	}
 	slices.SortFunc(s.Jobs, func(a, b JobStatus) int {
 		return cmp.Or(cmp.Compare(a.User, b.User), cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))

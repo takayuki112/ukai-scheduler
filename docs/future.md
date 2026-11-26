@@ -93,6 +93,11 @@ not touch otherwise.
 **Steps.** An Indexed Job with two pods and `kai.scheduler/batch-min-member: "2"`. When both run, let
 one succeed and delete the other. The new pod stays Pending.
 
+## Ladder
+
+A second scheme, with priority falling step by step as a user runs more, a share that follows
+demand, levels chosen by users, and protected jobs. A prototype exists, see [ladder](ladder.md).
+
 ## Other ideas
 
 - **Reserve GPUs for a large job.** Smaller P1 that fit may overtake a large one without end, as

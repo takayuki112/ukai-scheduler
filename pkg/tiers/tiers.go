@@ -41,6 +41,8 @@ const (
 	Charged
 	// Promotable jobs may be promoted into unused budget or demoted to excess.
 	Promotable
+	// Laddered jobs are managed by the ladder scheme instead, see package ladder.
+	Laddered
 )
 
 // LargeJobRule says how to rank a promotable job larger than the whole allowance.

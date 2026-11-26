@@ -51,6 +51,8 @@ type plugin struct {
 	charged map[string][]*jobState
 	// orphans are pods without a PodGroup, by its former ID.
 	orphans map[common_info.PodGroupID]*orphan
+	// ladder is set with the ladder scheme, once it applies to the session.
+	ladder *ladderOutcome
 }
 
 type jobState struct {
@@ -109,9 +111,15 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 
 	p.ssn = ssn
 	p.collect()
-	results := tiers.Assign(p.config.Policy, p.tierJobs())
+	var results map[string]tiers.Result
+	var outcome *ladderOutcome
+	if p.config.Scheme == SchemeLadder {
+		results, outcome = p.assignLadder(time.Now())
+	} else {
+		results = tiers.Assign(p.config.Policy, p.tierJobs())
+	}
 	p.report(results)
-	status := p.buildStatus(results)
+	status := p.buildStatus(results, outcome)
 	if p.config.Mode != Enforce {
 		publish(status)
 		return
@@ -122,6 +130,13 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 		state.info.Priority = results[string(id)].Priority
 	}
 	p.results = results
+	if outcome != nil {
+		p.applyLadder(outcome)
+		if p.config.Ladder.EvictGap > 0 {
+			ssn.AddPreemptVictimFilterFn(p.gapFilter)
+		}
+		ssn.AddVictimOrderFn(p.lastStartedFirst)
+	}
 	openSession.Store(p)
 	ssn.AddPrePredicateFn(p.prePredicate)
 	ssn.AddVictimInvariantPrePredicateFn(p.victimInvariantPrePredicate)
@@ -130,7 +145,7 @@ func (p *plugin) OnSessionOpen(ssn *framework.Session) {
 
 func (p *plugin) OnSessionClose(*framework.Session) {
 	openSession.CompareAndSwap(p, nil)
-	p.ssn, p.jobs, p.charged, p.orphans, p.results = nil, nil, nil, nil, nil
+	p.ssn, p.jobs, p.charged, p.orphans, p.results, p.ladder = nil, nil, nil, nil, nil, nil
 }
 
 // collect reads the jobs that the configuration covers.
@@ -268,6 +283,9 @@ func (p *plugin) taskUnits(task *pod_info.PodInfo) tiers.Units {
 // hold says why a task may not be placed, or "" if it may.
 func (p *plugin) hold(task *pod_info.PodInfo) string {
 	job := p.jobs[task.Job]
+	if job != nil && job.class == tiers.Laddered {
+		return p.ladderHold(job)
+	}
 	if job == nil || job.class != tiers.Budgeted {
 		return ""
 	}
