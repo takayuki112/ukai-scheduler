@@ -139,7 +139,7 @@ ordinary job. One that runs is never demoted: its user just cannot protect more 
 - Whether history should count, as in Slurm's fair share: GPU hours of the past days, not just
   what runs now. It needs stored state, so it is left out of the first version.
 
-## First results
+## Simulated comparison
 
 `COMPARE=1 go test ./pkg/tierbudget -run TestCompare -v -timeout 2h` runs KAI's actions and this
 plugin against a simulated clock: 8 nodes of 8 GPUs, 2 heavy users who always keep 3 jobs of 4 or
@@ -165,6 +165,42 @@ job starts over. 48 hours, without the first and last 6, mean of 3 seeds.
 
 On kind, `test/ladder/run.sh` checks steps, the gap, levels, holds with reasons, and protection
 with real pods.
+
+## Budget or ladder?
+
+The numbers are those of the simulation above, so of one load.
+
+| | Budget | Ladder |
+|---|---|---|
+| **What users choose** | P1 within the budget, P2 for the rest | Nothing; optionally a level, or protection |
+| **Past the limit** | P1 waits, even on idle GPUs; P2 drops to excess | Nothing waits; each job ranks a little lower |
+| **Light users** | Start at once (median 0 min) | Start at once (median 0 min) |
+| **Heavy jobs evicted** | 27 | 15 with fixed steps, 16 with the share |
+| **GPU hours lost to evictions** | 117 | 72 with fixed steps, 54 with the share |
+| **Heavy GPU hours done** | 2376 | 2372 with fixed steps, 2505 with the share |
+| **Heavy users' median wait** | 2.4 h | 4.1 h with fixed steps, 3.1 h with the share |
+| **Settings to choose** | Budget, allowance, two priorities | Steps and widths, gap, share window, protection |
+| **Follows demand** | No: one number for busy and quiet days | With `ladderWidth: share` |
+| **Predictable for users** | Yes: three tiers, a number to stay under | Less: many steps, which move with the share |
+| **Jobs that must not be evicted** | P0 only, outside the scheme | Protection, at a cost, for a time, within quota |
+| **Maturity** | Unit, kind, scale and soak tests | Unit and kind tests, one simulated load |
+
+**For the budget.** It is simple to explain and to check: a user knows how much they may run at
+P1, and a held job says why. It is the tested one, through a 2.5-hour soak of 9,000 jobs.
+Heavy users' jobs started sooner in the simulation.
+
+**For the ladder.** Heavy users are never stopped, only ranked lower, which is what they asked for.
+It evicts about half as often, and with the share loses less than half the work, because neighbouring
+steps do not evict each other, and the job that started last is evicted first. The share removes the one number that is
+wrong on either a busy or a quiet day. Levels and protection give users a say for what matters
+most to them.
+
+**Against the ladder, so far.** One load has been simulated, and light users hardly compete in it.
+Protection did not reduce lost work there. Protected jobs need queues with deserved quota, and
+KAI does not count them in it. More settings, and priorities that move, are harder to explain.
+
+**Suggestion.** Keep the budget as the default. Try the ladder with the share and without
+protection, in audit mode first, once a busier load has been simulated.
 
 ## Further comparisons
 
